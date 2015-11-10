@@ -1,0 +1,3 @@
+*.o
+fft_test
+wav_reader
