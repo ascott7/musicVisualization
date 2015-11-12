@@ -41,60 +41,83 @@ struct {
 */
 
 
-int main () {
-    char * memblock;
-    char * chunk1;
-    unsigned size, chunk1Size; 
+int main (int argc, char** argv) {
+    if (argc != 2) {
+        cout << "Incorrect parameters. Format is ./wav_reader filename.wav" << endl;
+        return 1;
+    }
+    string filename = argv[1];
+    char * headerChunk;
+    char * formatChunkHeader;
+    char * formatChunk;
+    char * wavDataHeader;
+    char * wavData;
+    unsigned size, formatChunkSize, wavDataSize;
 
-    ifstream file ("space_oddity.wav", ios::binary | ios::in);
+    ifstream file (filename, ios::binary | ios::in);
     if (file.is_open()) {
-        memblock = new char [12];
-        file.read(memblock, 12);
+        // read the header chunk
+        headerChunk = new char [12];
+        file.read(headerChunk, 12);
 
-        chunk1 = new char [48];
-        file.read(chunk1, 48);
-        file.close();
-
-        // print ckID
+        // TODO: check that these first 4 characters are RIFF
         cout << "CHUNK ID: ";
         for (unsigned i = 0; i < 4; i++) {
-            cout << memblock[i];
+            cout << headerChunk[i];
         }
         cout << endl;
-
-        // print ckSize
-        size = *(unsigned *) (memblock + sizeof(char) * 4);
+        size = *(unsigned *) (headerChunk + sizeof(char) * 4);
         cout << "CHUNK SIZE: " << size << endl;
-
-        // print WAVEID
         cout << "WAVE ID: ";
         for (unsigned i = 8; i < 12; i++) {
-            cout << memblock[i];
+            cout << headerChunk[i];
         }
         cout << endl;
 
-        cout << "READING CHUNK 1" << endl;
-
+        // read the header of the fmt chunk
+        formatChunkHeader = new char [8];
+        file.read(formatChunkHeader, 8);
         for (unsigned i = 0; i < 4; i++) {
-            cout << chunk1[i];
+            cout << formatChunkHeader[i];
         }
         cout << endl;
+        formatChunkSize = *(unsigned *) (formatChunkHeader + sizeof(char) * 4);
+        cout << "Format chunk size: " << formatChunkSize << endl;
 
-        chunk1Size = *(unsigned *) (chunk1 + sizeof(char) * 4);
-        cout << "CHUNK 1 SIZE: " << chunk1Size << endl;
+        // read the body of the fmt chunk
+        formatChunk = new char [formatChunkSize];
+        file.read(formatChunk, formatChunkSize);
+        printf("Format code: %02x%02x\n", formatChunk[1], formatChunk[0]);
+        printf("Number of channels: %d\n", *(unsigned short*) (formatChunk + sizeof(char) * 2));
+        printf("Samples per second: %d\n", *(unsigned *) (formatChunk + sizeof(char) * 4));
+        printf("Bytes per second: %d\n", *(unsigned *) (formatChunk + sizeof(char) * 8));
+        printf("Data block size: %d\n", *(unsigned short *) (formatChunk + sizeof(char) * 12));
+        printf("Bits per sample: %d\n", *(unsigned short *) (formatChunk + sizeof(char) * 14));
 
-        printf("Format code: %02x%02x\n", chunk1[9], chunk1[8]);
-        printf("Number of channels: %d\n", *(unsigned short*) (chunk1 + sizeof(char) * 10));
-        printf("Samples per second: %d\n", *(unsigned *) (chunk1 + sizeof(char) * 12));
-        printf("Bytes per second: %d\n", *(unsigned *) (chunk1 + sizeof(char) * 16));
-        printf("Data block size: %d\n", *(unsigned short *) (chunk1 + sizeof(char) * 20));
-        printf("Bits per sample: %d\n", *(unsigned short *) (chunk1 + sizeof(char) * 22));
-        printf("Sample 1: %01x\n", chunk1[24]);
-        printf("Sample 2: %01x\n", chunk1[25]);
-        printf("Sample 2: %01x\n", chunk1[26]);
-        printf("Sample 2: %01x\n", chunk1[27]);
-        delete[] memblock;
-        delete[] chunk1;
+        // read the header of the data chunk
+        wavDataHeader = new char [8];
+        file.read(wavDataHeader, 8);
+        for (unsigned i = 0; i < 4; i++) {
+            cout << wavDataHeader[i];
+        }
+        cout << endl;
+        wavDataSize = *(unsigned *) (wavDataHeader + sizeof(char) * 4);
+        printf("Data size: %d\n", wavDataSize);
+
+        // read the data itself
+        wavData = new char [wavDataSize];
+        file.read(wavData, wavDataSize);
+        file.close();
+
+        for (unsigned i = 0; i < 10; i++) {
+            printf("Sample %d: %x\n", i, wavData[i]);
+        }
+
+        delete[] headerChunk;
+        delete[] formatChunkHeader;
+        delete[] formatChunk;
+        delete[] wavDataHeader;
+        delete[] wavData;
     }
     else {
         cout << "Unable to open file";
