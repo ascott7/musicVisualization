@@ -1,11 +1,13 @@
 CXX = clang++
 CXXFLAGS = -g -std=c++11 -Wall -Wextra -pedantic
 
-TARGETS=wav_reader fft_test
+TARGETS=wav_reader_test fft_test
 
 all: $(TARGETS)
 
-wav_reader: wav_reader.cpp
+
+
+wav_reader_test: wav_reader.o wav_reader_test.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 fft_test: fft_test.cpp fft.hpp
@@ -16,3 +18,6 @@ test: fft_test
 
 clean:
 	rm -f $(TARGETS)
+
+
+wav_reader.o: wav_reader.hpp wav_reader.cpp

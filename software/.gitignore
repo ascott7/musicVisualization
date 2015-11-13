@@ -1,3 +1,4 @@
 *.o
 fft_test
-wav_reader
+wav_reader_test
+*.dSYM
