@@ -19,109 +19,146 @@
 #include <string>
 using namespace std;
 
-/*typedef unsigned WORD;
-typedef unsigned long DWORD;
-typedef unsigned char BYTE;
-typedef DWORD FOURCC;           // Four-character code
-typedef FOURCC CKID;            // Four-character-code chunk identifier
-typedef DWORD CKSIZE;           // 32-bit unsigned size value
-typedef struct {                // Chunk structure
-    CKID ckID;                  // Chunk type identifier
-    CKSIZE ckSize;              // Chunk size field (size of ckData)
-    BYTE ckData[ckSize];        // Chunk data
-} CK;
+#define HEADER_CHUNK_SIZE 8
 
-struct {
-    WORD wFormatTag;            // Format category
-    WORD wChannels;             // Number of channels
-    DWORD dwSamplesPerSec;      // Sampling rate
-    DWORD dwAvgBytesPerSec;     // For buffer estimation
-    WORD wBlockAlign;           // Data block size
-} fmt_ck;
-*/
+struct RIFFHeader {
+    char ckID[4];
+    unsigned ckSize;
+} riffHeader;
+
+struct fmtChunk {
+    char wavID[4];
+    char ckID[4];
+    unsigned cksize;
+    unsigned short wFormatTag;            // Format category
+    unsigned short wChannels;             // Number of channels
+    unsigned dwSamplesPerSec;      // Sampling rate
+    unsigned dwAvgBytesPerSec;     // For buffer estimation
+    unsigned short wBlockAlign;           // Data block size
+    unsigned short wBitsPerSample;
+} fmtChunk;
+
+struct dataChunk {
+    char ckID[4];
+    unsigned cksize;
+} dataChunk;
 
 
-int main (int argc, char** argv) {
+unsigned readHeaderChunk(ifstream& file)
+{
+    char* headerChunk;
+    unsigned size;
+
+    headerChunk = new char [HEADER_CHUNK_SIZE];
+    file.read(headerChunk, HEADER_CHUNK_SIZE);
+    for (unsigned i = 0; i < 4; i++) {
+        riffHeader.ckID[i] = headerChunk[i];
+    }
+    // check for RIFF header
+    if (strcmp(riffHeader.ckID, "RIFF") != 0) {
+        cerr << "Invalid file, not RIFF type" << endl;
+        exit(1);
+    }
+    // get file size
+    size = *(unsigned *) (headerChunk + sizeof(char) * 4);
+    delete[] headerChunk;
+    return size;
+}
+
+void readFormatChunk(char* fileData)
+{
+    //fmtChunk fmt;
+    for (unsigned i = 0; i < 4; i++) {
+        fmtChunk.wavID[i] = fileData[i];
+    }
+    // check for WAVE header
+    if (strcmp(fmtChunk.wavID, "WAVE")) {
+        cerr << "File missing WAVE identifier" << endl;
+        exit(2);
+    }
+    for (unsigned i = 4; i < 8; i++) {
+        fmtChunk.ckID[i - 4] = fileData[i];
+    }
+    // check for fmt header
+    if (strcmp(fmtChunk.ckID, "fmt ")) {
+        cerr << "File missing fmt chunk" << endl;
+        exit(3);
+    }
+    // get format data from the file
+    fmtChunk.cksize = *(unsigned *) (fileData + sizeof(char) * 8);
+    fmtChunk.wFormatTag = (0x00 | fileData[13]) << 8 | fileData[12];
+    fmtChunk.wChannels = *(unsigned short*) (fileData + sizeof(char) * 14);
+    fmtChunk.dwSamplesPerSec = *(unsigned *) (fileData + sizeof(char) * 16);
+    fmtChunk.dwAvgBytesPerSec = *(unsigned *) (fileData + sizeof(char) * 20);
+    fmtChunk.wBlockAlign = *(unsigned short *) (fileData + sizeof(char) * 24);
+    fmtChunk.wBitsPerSample = *(unsigned short *) (fileData + sizeof(char) * 26);
+    
+    /*
+    Uncomment to print format information
+    cout << "Format chunk size: " << fmtChunk.cksize << endl;
+    printf("Format code: %04x\n", fmtChunk.wFormatTag);
+    printf("Number of channels: %d\n", fmtChunk.wChannels);
+    printf("Samples per second: %d\n", fmtChunk.dwSamplesPerSec);
+    printf("Bytes per second: %d\n", fmtChunk.dwAvgBytesPerSec);
+    printf("Data block size: %d\n", fmtChunk.wBlockAlign);
+    printf("Bits per sample: %d\n", fmtChunk.wBitsPerSample);
+    */
+}
+
+void readDataChunk(char* fileData)
+{
+    for (unsigned i = 28; i < 32; i++) {
+        dataChunk.ckID[i - 28] = fileData[i];
+    }
+    // check for data header
+    if (strcmp(dataChunk.ckID, "data")) {
+        cerr << "File missing data chunk" << endl;
+        exit(4);
+    }
+    dataChunk.cksize = *(unsigned *) (fileData + sizeof(char) * 32);
+    printf("Data size: %d\n", dataChunk.cksize);
+    //printf("%d %d\n", fileSize - 36, dataChunk.cksize);
+}
+
+
+float* readData(string filename) 
+{
+    char* fileData;
+    float* wavData;
+    unsigned fileSize;
+
+    ifstream file (filename, ios::binary | ios::in);
+    if (file.is_open()) {
+        fileSize = readHeaderChunk(file);
+        fileData = new char [fileSize];
+        file.read(fileData, fileSize);
+        file.close();
+
+        readFormatChunk(fileData);
+        readDataChunk(fileData);
+
+        wavData = new float[dataChunk.cksize];
+        for (unsigned i = 0; i < dataChunk.cksize; i++) {
+            wavData[i] = float(unsigned(fileData[i + 36]));
+        }
+        delete[] fileData;
+        return wavData;
+    }
+    else {
+        cout << "Unable to open file";
+        exit(5);
+    }
+}
+
+int main (int argc, char** argv) 
+{
     if (argc != 2) {
         cout << "Incorrect parameters. Format is ./wav_reader filename.wav" << endl;
         return 1;
     }
     string filename = argv[1];
-    char * headerChunk;
-    char * formatChunkHeader;
-    char * formatChunk;
-    char * wavDataHeader;
-    char * wavData;
-    unsigned size, formatChunkSize, wavDataSize;
-
-    ifstream file (filename, ios::binary | ios::in);
-    if (file.is_open()) {
-        // read the header chunk
-        headerChunk = new char [12];
-        file.read(headerChunk, 12);
-
-        // TODO: check that these first 4 characters are RIFF
-        cout << "CHUNK ID: ";
-        for (unsigned i = 0; i < 4; i++) {
-            cout << headerChunk[i];
-        }
-        cout << endl;
-        size = *(unsigned *) (headerChunk + sizeof(char) * 4);
-        cout << "CHUNK SIZE: " << size << endl;
-        cout << "WAVE ID: ";
-        for (unsigned i = 8; i < 12; i++) {
-            cout << headerChunk[i];
-        }
-        cout << endl;
-
-        // read the header of the fmt chunk
-        formatChunkHeader = new char [8];
-        file.read(formatChunkHeader, 8);
-        for (unsigned i = 0; i < 4; i++) {
-            cout << formatChunkHeader[i];
-        }
-        cout << endl;
-        formatChunkSize = *(unsigned *) (formatChunkHeader + sizeof(char) * 4);
-        cout << "Format chunk size: " << formatChunkSize << endl;
-
-        // read the body of the fmt chunk
-        formatChunk = new char [formatChunkSize];
-        file.read(formatChunk, formatChunkSize);
-        printf("Format code: %02x%02x\n", formatChunk[1], formatChunk[0]);
-        printf("Number of channels: %d\n", *(unsigned short*) (formatChunk + sizeof(char) * 2));
-        printf("Samples per second: %d\n", *(unsigned *) (formatChunk + sizeof(char) * 4));
-        printf("Bytes per second: %d\n", *(unsigned *) (formatChunk + sizeof(char) * 8));
-        printf("Data block size: %d\n", *(unsigned short *) (formatChunk + sizeof(char) * 12));
-        printf("Bits per sample: %d\n", *(unsigned short *) (formatChunk + sizeof(char) * 14));
-
-        // read the header of the data chunk
-        wavDataHeader = new char [8];
-        file.read(wavDataHeader, 8);
-        for (unsigned i = 0; i < 4; i++) {
-            cout << wavDataHeader[i];
-        }
-        cout << endl;
-        wavDataSize = *(unsigned *) (wavDataHeader + sizeof(char) * 4);
-        printf("Data size: %d\n", wavDataSize);
-
-        // read the data itself
-        wavData = new char [wavDataSize];
-        file.read(wavData, wavDataSize);
-        file.close();
-
-        for (unsigned i = 0; i < 10; i++) {
-            printf("Sample %d: %x\n", i, wavData[i]);
-        }
-
-        delete[] headerChunk;
-        delete[] formatChunkHeader;
-        delete[] formatChunk;
-        delete[] wavDataHeader;
-        delete[] wavData;
-    }
-    else {
-        cout << "Unable to open file";
-    }
+    float* data;
+    data = readData(filename);
     return 0;
 }
 
