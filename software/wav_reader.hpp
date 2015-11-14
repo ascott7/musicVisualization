@@ -30,7 +30,7 @@ class wav_reader {
         *
         */
         std::vector<float> get_range(std::chrono::microseconds start, 
-            std::chrono::microseconds duration);
+            std::chrono::microseconds duration) const;
     
     private:
         struct fmt_chunk {

@@ -5,8 +5,6 @@ TARGETS=wav_reader_test fft_test
 
 all: $(TARGETS)
 
-
-
 wav_reader_test: wav_reader.o wav_reader_test.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
@@ -21,3 +19,4 @@ clean:
 
 
 wav_reader.o: wav_reader.hpp wav_reader.cpp
+frame.o: frame.cpp frame.hpp

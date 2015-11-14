@@ -55,7 +55,7 @@ wav_reader::~wav_reader()
 }
 
 std::vector<float> wav_reader::get_range(std::chrono::microseconds start, 
-            std::chrono::microseconds duration)
+            std::chrono::microseconds duration) const
 {
     std::vector<float> samples_in_range;
     float samples_per_micros = float(fmt_chunk.dw_samples_per_sec) / 1000000;
