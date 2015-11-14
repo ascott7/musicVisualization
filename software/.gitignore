@@ -2,3 +2,4 @@
 fft_test
 wav_reader_test
 *.dSYM
+visualize
