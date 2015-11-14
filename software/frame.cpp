@@ -8,6 +8,7 @@
 
 #include "fft.hpp"
 #include "frame.hpp"
+#include "piHelpers.h"
 
 #include <algorithm>
 #include <complex>
@@ -69,7 +70,10 @@ const pixel& frame::at(size_t x, size_t y) const
 
 frame_controller::frame_controller(frame_generator* gen)
         : gen_(gen), frame_()
-{}
+{
+    pioInit();
+    spiInit(244000, 0);
+}
 
 void frame_controller::set_generator(frame_generator* gen)
 {
@@ -127,6 +131,27 @@ void frame_controller::write_frame() const
         // SPI stuff. still need to decide on the on-the-wire frame
         // format. need to be careful b/c the LED matrix only has 4 bit color
         // channel depth, but our pixels use 8 bit color channels
+
+        // For now the format for the spi communication will involve sending
+        // row by row, starting with the first row. For each row, we send each
+        // column, starting with column 0 up to 31. For each individual pixel
+        // at (row, column), we do 3 sends, each 8 bits long representing in 
+        // order, red, green and then blue for that pixel. This will require
+        // a minimum of 32 * 32 * 3 * 8 = 24,568 clock cycles to send a new
+        // frame.
+
+        // We may want to consider adding a LOAD signal that is high for the 
+        // duration of the transfer or right before the transfer so that the
+        // FPGA knows it should be loading data (this will require more 
+        // thought).
+        size_t x, y;
+        for (y = 0; y < frame::HEIGHT; ++y) {
+            for (x = 0; x < frame::WIDTH; ++x) {
+                spiSendReceive(frame_.at(x, y).red());
+                spiSendReceive(frame_.at(x, y).green());
+                spiSendReceive(frame_.at(x, y).blue());
+            }
+        }
 }
 
 scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate)

@@ -54,7 +54,7 @@ public:
 // should inherit from this class and implement all the virtual methods
 class frame_generator {
 public:
-        virtual ~frame_generator() = 0;
+        virtual ~frame_generator() = default;
         // generate the next frame to display based on a set of samples
         // for the next time slice.
         virtual bool
