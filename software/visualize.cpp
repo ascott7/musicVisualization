@@ -30,6 +30,7 @@ int main (int argc, char** argv)
     gen = new scrolling_fft_generator(frame_rate);
     frame_controller controller = frame_controller(gen);
 
+    controller.play_song(filename);
 
     delete gen;
 
