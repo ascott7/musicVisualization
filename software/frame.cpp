@@ -240,3 +240,23 @@ unsigned scrolling_fft_generator::get_frame_rate() const
 {
         return frame_rate_;
 }
+
+bool trivial_frame_generator::make_next_frame(frame& frame,
+                                              vector<float>& sample)
+{
+        (void)sample;
+
+        // make an all red frame for testing
+        for_each(frame.begin(), frame.end(), [](pixel& pix) {
+                pix = pixel(255, 0, 0);
+        });
+
+        return true;
+}
+
+unsigned trivial_frame_generator::get_frame_rate() const
+{
+        // arbitrary
+        return 10;
+}
+
