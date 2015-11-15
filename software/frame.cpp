@@ -11,6 +11,7 @@
 #include "piHelpers.h"
 
 #include <algorithm>
+#include <cassert>
 #include <complex>
 #include <cstdlib>
 #include <limits>
@@ -154,8 +155,8 @@ void frame_controller::write_frame() const
         }
 }
 
-scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate)
-        : frame_rate_(frame_rate), last_frame_()
+scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate, float cutoff)
+        : frame_rate_(frame_rate), last_frame_(), cutoff_(cutoff)
 {
         // zero the frame
         last_frame_.fill(pixel());
@@ -174,7 +175,7 @@ bool scrolling_fft_generator::make_next_frame(frame& frame,
         if (!fft(c_sample))
                 return false;
 
-        new_col = bin_sample(c_sample);
+        new_col = create_next_column(c_sample);
 
         for (y = 0; y < frame::HEIGHT; ++y) {
                 for (x = frame::WIDTH; x-- > 1;)
@@ -186,43 +187,53 @@ bool scrolling_fft_generator::make_next_frame(frame& frame,
 }
 
 array<pixel, frame::HEIGHT>
-scrolling_fft_generator::bin_sample(vector<complex<float>>& sample)
+scrolling_fft_generator::create_next_column(
+        vector<complex<float>>& spectrum)
 {
         array<pixel, frame::HEIGHT> binned;
-        complex<float> average;
+        complex<float> max, sum;
         vector<complex<float>>::iterator it;
-        float max, r;
         unsigned bin_size;
-        
-        // normalize
-        max = real(sample.at(0));
-        for_each(sample.begin(), sample.end(), [&](complex<float>& i) {
-                        if (real(i) > max)
-                                max = real(i);
-                });
-        for_each(sample.begin(), sample.end(), [&](complex<float>& i) {
-                        i /= max;
+
+        // find the max element in the spectrum
+        max = *max_element(spectrum.begin(), spectrum.end(),
+                          [&](complex<float>& lhs, complex<float>& rhs) {
+                return abs(lhs) < abs(rhs);
+        });
+
+        // normalize by that element
+        for_each(spectrum.begin(), spectrum.end(), [&](complex<float>& i) {
+                i /= max;
+        });
+
+        // bin the spectrum. each element in the binned spectrum gets the
+        // average of the next bin_size elements from the spectrum. We
+        // multiply binned.size() by 2 because we only want half of
+        // the spectrum (it's symetric)
+        it = spectrum.begin();
+        bin_size = spectrum.size()/(2*binned.size());
+        for_each(binned.begin(), binned.end(), [&](pixel& pix) {
+                sum = 0;
+                for_each(it, it + bin_size, [&](complex<float>& i) {
+                        sum += i;
                 });
 
-        // bin the sample. each element in the binned sample gets the
-        // average of the next bin_size elements from the sample
-        it = sample.begin();
-        bin_size = sample.size()/(2*binned.size());
-        for_each(binned.begin(), binned.end(), [&](pixel& i) {
-                        average = 0;
-                        for_each(it, it + bin_size, [&](complex<float>& i) {
-                                        average += i;
-                                });
-                        r = real(average/complex<float>(bin_size));
-
-                        // larger values get 
-                        i.green() = numeric_limits<uint8_t>::max() * r;
-                        i.blue() = numeric_limits<uint8_t>::max() - i.green();
-
-                        it += bin_size;
-                });
+                pix = normal_to_pixel(abs(sum/complex<float>(bin_size)));
+                it += bin_size;
+        });
 
         return binned;
+}
+
+pixel scrolling_fft_generator::normal_to_pixel(float norm)
+{
+        uint8_t max = numeric_limits<uint8_t>::max();
+        assert(norm <= 1.0);
+
+        // for now we just use a green/blue pixel, with high values
+        // being all green and low values being all blue
+        return norm > cutoff_ ? pixel(0, norm*max, (1.0 - norm)*max)
+                : pixel();
 }
 
 unsigned scrolling_fft_generator::get_frame_rate() const

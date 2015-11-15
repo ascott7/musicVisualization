@@ -58,7 +58,7 @@ public:
         // generate the next frame to display based on a set of samples
         // for the next time slice.
         virtual bool
-        make_next_frame(frame& frame, std::vector<float>& sample) = 0;
+        make_next_frame(frame& frame, std::vector<float_t>& sample) = 0;
         virtual unsigned get_frame_rate() const = 0;
 };
 
@@ -93,14 +93,20 @@ private:
 // basic fft frame generator. not yet implemented
 class scrolling_fft_generator : public frame_generator {
 public:
-        scrolling_fft_generator(unsigned frame_rate);
+        scrolling_fft_generator(unsigned frame_rate, float cutoff);
         ~scrolling_fft_generator() = default;
         bool make_next_frame(frame& frame, std::vector<float>& sample);
+
         unsigned get_frame_rate() const;
 private:
-        static std::array<pixel, frame::HEIGHT>
-        bin_sample(std::vector<std::complex<float>>& sample);
+        // convert a sample to a column of pixels to write out next
+        std::array<pixel, frame::HEIGHT>
+        create_next_column(std::vector<std::complex<float>>& sample);
+
+        // convert a normalized, binned, spectrum sample to a pixel value.
+        pixel normal_to_pixel(float norm);
         
         const unsigned frame_rate_;
         frame last_frame_;
+        float cutoff_;
 };

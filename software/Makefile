@@ -1,5 +1,5 @@
 CXX = clang++
-CXXFLAGS = -g -std=c++11 -Wall -Wextra -pedantic
+CXXFLAGS = -g -std=c++11 -Wall -Wextra -pedantic -O3
 
 TARGETS=wav_reader_test fft_test visualize
 
@@ -9,10 +9,10 @@ wav_reader_test: wav_reader.o wav_reader_test.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 fft_test: fft_test.cpp fft.hpp
-	$(CXX) $(CXXFLAGS) -O3 -o $@ $< -lm
+	$(CXX) $(CXXFLAGS) -o $@ $< -lm
 
 visualize: visualize.o frame.o wav_reader.o
-	$(CXX) $(CXXFLAGS) -O3 -o $@ $^
+	$(CXX) $(CXXFLAGS) -o $@ $^
 
 test: fft_test
 	./fft_test

@@ -24,15 +24,12 @@ int main (int argc, char** argv)
         return 1;
     }
     string filename = argv[1];
-    wav_reader wav_file = wav_reader(filename);
     size_t frame_rate = 16;
-    frame_generator* gen;
-    gen = new scrolling_fft_generator(frame_rate);
-    frame_controller controller = frame_controller(gen);
+    float cutoff = 0.2;
+    scrolling_fft_generator gen(frame_rate, cutoff);
+    frame_controller controller = frame_controller(&gen);
 
     controller.play_song(filename);
-
-    delete gen;
 
     return 0;
 }
