@@ -3,6 +3,8 @@ CXXFLAGS = -g -std=c++11 -Wall -Wextra -pedantic -O3
 
 TARGETS=wav_reader_test fft_test visualize
 
+export MAKEFLAGS="-j 8
+
 all: $(TARGETS)
 
 wav_reader_test: wav_reader.o wav_reader_test.cpp
