@@ -24,25 +24,27 @@
  * \note For mult-bit busses, the component signals listed above are given in
  * lsb to msb order, e.g. rgb1[0] is the R1 signal.
  */
-module driver(input  logic clk,
-              input  logic reset,
-              input  logic sck, 
-              input  logic sdi,
-              output logic [2:0] rgb1, rgb2,
-              output logic [3:0] rsel,
-              output logic mclk,
-              output logic latch,
-              output logic oe);
+module ledDriver2
+                #(parameter CDEPTH=4)
+                 (input  logic clk,
+                  input  logic reset,
+                  input  logic sck, 
+                  input  logic sdi,
+                  output logic [2:0] rgb1, rgb2,
+                  output logic [3:0] rsel,
+                  output logic mclk,
+                  output logic latch,
+                  output logic oe);
 
     logic done, fend, fstart, we;
     logic [3*CDEPTH-1:0] rpix, wpix;
-    output logic [9:0] addr;
+    logic [9:0] addr;
 
     assign oe = 1'b1;
 
     frame_reader fr(clk, reset, sck, sdi, addr, rpix, done);
     frame_writer fw(clk, reset, we, wpix, addr, fstart, fend,
-                    rb1, rgb2, rsel, mclk, latch);
+                    rgb1, rgb2, rsel, mclk, latch);
     controler ctl(clk, reset, done, fend, rpix, wpix, addr, fstart, we);
 
 endmodule
@@ -69,7 +71,8 @@ module frame_reader
                     output logic [3*CDEPTH-1:0] pix,
                     output logic done);
 
-    logic [3*CDEPTH-1:0] frame[0:32*32];
+    logic [3*CDEPTH-1:0] frame[0:32*32-1];
+    logic [3*CDEPTH-1:0] tmp_pix;
     logic [9:0] faddr;
     logic [7:0] bits;
     logic saw_sck;
@@ -97,12 +100,15 @@ module frame_reader
             saw_sck <= '0;
         end else if (sck && ~saw_sck) begin
             saw_sck <= '1;
-            frame[faddr] = bits == 0 ? sdi : frame[faddr] | sdi << bits;
             if (bits == 3*CDEPTH-1) begin
                 bits <= '0;
                 faddr <= faddr + 1'b1;
-            end else
+                frame[faddr] <= tmp_pix | sdi << bits;
+                tmp_pix <= '0;
+            end else begin
                 bits <= bits + 1'b1;
+                tmp_pix <= tmp_pix | sdi << bits;
+            end
         end else if (~sck)
             saw_sck <= '0;
 
@@ -170,14 +176,14 @@ module frame_writer
                     input  logic fstart,
                     output logic fend,
                     output logic [2:0] lo_rgb,
-                    output logic [2:0] hi_rgb
+                    output logic [2:0] hi_rgb,
                     output logic [3:0] row,
                     output logic mclk,
                     output logic latch);
 
-    logic [3*CDEPTH-1:0] frame[0:32*32];
+    logic [3*CDEPTH-1:0] frame[0:32*32-1];
     logic [4:0] col;
-    input logic [3*CDEPTH-1:0] lo_pix, hi_pix;
+    logic [3*CDEPTH-1:0] lo_pix, hi_pix;
     logic [CDEPTH-1:0] pwm_cnt;
     logic [MCLK_DIV_BITS-1:0] mclk_div;
 
@@ -186,8 +192,6 @@ module frame_writer
             row <= '0;
             col <= '0;
             fend <= '0;
-            lo_rgb <= '0;
-            hi_rgb <= '0;
             pwm_cnt <= '0;
             mclk_div <= '0;
         end else if (~fend) begin
@@ -197,12 +201,13 @@ module frame_writer
             row <= pwm_cnt == '1 ? row + 1'b1 : row;
             fend <= {col,row,mclk_div} == '1;
         end
+
+        if (we)
+            frame[waddr] <= wpix;
     end
 
-    assign frame[waddr] = we ? wpix : frame[waddr];
-
-    assign lo_pix = frame[{col, row, 1'b0}];
-    assign hi_pix = frame[{col, row, 1'b1}];
+    assign lo_pix = we ? frame[waddr] : frame[{col, row, 1'b0}];
+    assign hi_pix = we ? frame[waddr] : frame[{col, row, 1'b1}];
     assign mclk = mclk_div[MCLK_DIV_BITS-1];
     assign latch = col == '1;
 
@@ -238,7 +243,7 @@ module controler
                  input  logic reset,
                  input  logic done,
                  input  logic fend,
-                 input  logic [3*CDEPTH-1:0] rpix,
+                 input  logic [3*CDEPTH-1:0] rpix, 
                  output logic [3*CDEPTH-1:0] wpix,
                  output logic [9:0] addr,
                  output logic fstart,
