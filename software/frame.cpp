@@ -72,8 +72,8 @@ const pixel& frame::at(size_t x, size_t y) const
 frame_controller::frame_controller(frame_generator* gen)
         : gen_(gen), frame_()
 {
-    pioInit();
-    spiInit(244000, 0);
+    //pioInit();
+    //spiInit(244000, 0);
 }
 
 void frame_controller::set_generator(frame_generator* gen)
@@ -146,13 +146,41 @@ void frame_controller::write_frame() const
         // FPGA knows it should be loading data (this will require more 
         // thought).
         size_t x, y;
+        uint8_t r0, g0, b0, r1, g1, b1;
+        uint8_t byte1, byte2, byte3;
         for (y = 0; y < frame::HEIGHT; ++y) {
-            for (x = 0; x < frame::WIDTH; ++x) {
-                spiSendReceive(frame_.at(x, y).red());
-                spiSendReceive(frame_.at(x, y).green());
-                spiSendReceive(frame_.at(x, y).blue());
+            for (x = 0; x < frame::WIDTH; x += 2) {
+                r0 = frame_.at(x, y).red() / 16;
+                g0 = frame_.at(x, y).green() / 16;
+                b0 = frame_.at(x, y).blue() / 16;
+                r1 = frame_.at(x + 1, y).red() / 16;
+                g1 = frame_.at(x + 1, y).green() / 16;
+                b1 = frame_.at(x + 1, y).blue() / 16;
+                byte1 = reverse(uint8_t(g0 << 4 | r0));
+                byte2 = reverse(uint8_t(r1 << 4 | b0));
+                byte3 = reverse(uint8_t(b1 << 4 | g1));
+                // printf("red0 %02x green0 %02X\n", r0, g0);
+                // printf("combined %02X\n", byte1);
+                // printf("blue0 %02x red1 %02X\n", b0, r1);
+                // printf("combined %02X\n", byte2);
+                // printf("green1 %02x blue1 %02X\n", g1, b1);
+                // printf("combined %02X\n", byte3);
+                spiSendReceive(byte1);
+                spiSendReceive(byte2);
+                spiSendReceive(byte3);
             }
         }
+}
+
+
+//http://stackoverflow.com/questions/2602823/in-c-c-whats-the-simplest-way-to
+// -reverse-the-order-of-bits-in-a-byte
+uint8_t frame_controller::reverse(uint8_t byte) const
+{
+   byte = (byte & 0xF0) >> 4 | (byte & 0x0F) << 4;
+   byte = (byte & 0xCC) >> 2 | (byte & 0x33) << 2;
+   byte = (byte & 0xAA) >> 1 | (byte & 0x55) << 1;
+   return byte;
 }
 
 scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate, float cutoff)
@@ -172,7 +200,7 @@ bool scrolling_fft_generator::make_next_frame(frame& frame,
 
         // copy to complex array and take the fft
         copy(sample.begin(), sample.end(), c_sample.begin());
-        if (!fft(c_sample))
+        if (fft(c_sample))
                 return false;
 
         new_col = create_next_column(c_sample);

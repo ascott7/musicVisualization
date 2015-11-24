@@ -84,6 +84,9 @@ private:
         void write_frame() const;
         std::chrono::microseconds get_frame_interval() const;
 
+        // helper function to reverse a byte
+        uint8_t reverse(uint8_t byte) const;
+
         using clock_t = std::chrono::high_resolution_clock;
 
         frame_generator* gen_;
