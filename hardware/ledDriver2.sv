@@ -38,15 +38,15 @@ module ledDriver2
 
     logic cdone, rdone, fend, fstart, we;
     logic [3*CDEPTH-1:0] rpix, wpix;
-    logic [9:0] addr;
+    logic [9:0] raddr, waddr;
 
     assign oe = 1'b1;
 
-    frame_reader fr(clk, reset, sck, sdi, cdone, addr, rpix, rdone);
-    frame_writer fw(clk, reset, we, wpix, addr, fstart, fend,
+    frame_reader fr(clk, reset, sck, sdi, cdone, raddr, rpix, rdone);
+    frame_writer fw(clk, reset, we, wpix, waddr, fstart, fend,
                     rgb1, rgb2, rsel, mclk, latch);
     controller ctl(clk, reset, rdone, fend, rpix, wpix, 
-                   addr, fstart, we, cdone);
+                   raddr, waddr, fstart, we, cdone);
 
 endmodule
 
@@ -80,7 +80,7 @@ module frame_reader
                     output logic [3*CDEPTH-1:0] pix_out,
                     output logic rdone);
 
-    typedef enum logic [2:0] {WAIT, NEW_SDI, FULL_PIX, DONE, COPY} state_t;
+    typedef enum logic [2:0] {WAIT, NEW_SDI, FULL_PIX, DONE, COPY, SCK_HI} state_t;
 
     state_t state, next_state;
     logic [3*CDEPTH-1:0] pix_in;
@@ -107,13 +107,14 @@ module frame_reader
             waddr <= '0;
             bits <= '0;
             state <= WAIT;
-            rdone <= '0;
+            pix_in <= '0;
         end else begin
             state <= next_state;
             if (state == NEW_SDI) begin
                 bits <= bits + 1'b1;
-                pix_in <= pix_in | sdi << bits;
+                pix_in <= {sdi, pix_in[3*CDEPTH-1:1]};
             end else if (state == FULL_PIX) begin
+                bits <= '0;
                 waddr <= waddr + 1'b1;
                 pix_in <= '0;
             end
@@ -123,15 +124,17 @@ module frame_reader
     always_comb
         case (state)
         WAIT: next_state = sck ? NEW_SDI : WAIT;
-        NEW_SDI: next_state = bits == 3*CDEPTH-1 ? FULL_PIX : WAIT;
-        FULL_PIX: next_state = waddr == '1 ? DONE : WAIT;
+        NEW_SDI: next_state = bits == 3*CDEPTH-1 ? FULL_PIX : SCK_HI;
+        FULL_PIX: next_state = waddr == '1 ? DONE : sck ? SCK_HI : WAIT;
         DONE: next_state = COPY;
         COPY: next_state = cdone ? WAIT : COPY;
+        SCK_HI: next_state = sck ? SCK_HI : WAIT;
         default: next_state = WAIT;
         endcase
 
     assign addr = state == COPY ? raddr : waddr;
-    assign we = state == FULL_PIX;
+    assign we = state == FULL_PIX; 
+    assign rdone = state == DONE;
 
 endmodule
 
@@ -218,9 +221,9 @@ module frame_writer
     ram #(3*CDEPTH, FRAME_ORDER-1) lo_ram(clk, lo_we, addr, wpix, lo_pix);
     ram #(3*CDEPTH, FRAME_ORDER-1) hi_ram(clk, hi_we, addr, wpix, hi_pix);
 
-    assign addr = state == WAIT ? waddr[FRAME_ORDER-2:0] : {col, row};
-    assign lo_we = we && waddr[FRAME_ORDER-1];
-    assign hi_we = we && ~waddr[FRAME_ORDER-1];
+    assign addr = state == WAIT ? waddr[FRAME_ORDER-2:0] : {row, col};
+    assign lo_we = we && ~waddr[FRAME_ORDER-1];
+    assign hi_we = we && waddr[FRAME_ORDER-1];
 
     always_ff @(posedge clk) begin
         if (reset) begin
@@ -236,7 +239,7 @@ module frame_writer
                 mclk_div <= mclk_div + 1'b1;
 
                 /* increment col on rising edge of mclk */
-                if (mclk_div == {MCLK_DIV_BITS-1'b1, 1'b0})
+                if (mclk_div == 1 << (MCLK_DIV_BITS - 1) - 1)
                     col <= col + 1'b1;
 
                 /*
@@ -260,7 +263,7 @@ module frame_writer
         DONE: next_state = WAIT;
         endcase
 
-    assign mclk = mclk_div[MCLK_DIV_BITS-1];
+    assign mclk = ~mclk_div[MCLK_DIV_BITS-1];
     assign latch = state == LATCH;
     assign fend = state == DONE;
 
@@ -299,7 +302,8 @@ module controller
                  input  logic fend,
                  input  logic [3*CDEPTH-1:0] rpix, 
                  output logic [3*CDEPTH-1:0] wpix,
-                 output logic [9:0] addr,
+                 output logic [9:0] raddr,
+                 output logic [9:0] waddr,
                  output logic fstart,
                  output logic we,
                  output logic cdone);
@@ -311,26 +315,30 @@ module controller
 
     always_ff @(posedge clk) begin
         if (reset) begin
-            addr <= '0;
+            raddr <= '0;
             state <= RESET;
+            saw_done <= '0;
+            waddr <= '0;
         end else begin
             state <= next_state;
 
             if (state == COPY || state == RESET)
-                addr <= addr + 1'b1;
+                raddr <= raddr + 1'b1;
 
             if (state == COPY)
                 saw_done <= '0;
             else if (rdone)
                 saw_done <= '1;
         end
+
+        waddr <= raddr;
     end
 
     always_comb
         case (state)
         WRITE: next_state = fend ? saw_done ? COPY : NEW_FRAME : WRITE;
         NEW_FRAME: next_state = WRITE;
-        COPY: next_state = cdone ? WAIT : COPY;
+        COPY: next_state = cdone ? NEW_FRAME : COPY;
         WAIT: next_state = saw_done ? COPY : WAIT;
         RESET: next_state = cdone ? WAIT : RESET;
         default: next_state = RESET;
@@ -338,8 +346,8 @@ module controller
 
     assign wpix = state == RESET ? '0 : rpix;
     assign fstart = state == NEW_FRAME;
+    assign cdone = waddr == '1;
     assign we = state == COPY || state == RESET;
-    assign cdone = addr == '1;
 
 endmodule
 
@@ -379,37 +387,48 @@ module testbench();
     logic [3:0] bits;
     logic [2:0] rgb1, rgb2;
     logic [3:0] rsel;
-    logic clk, reset, sck, sdi, mclk, latch, oe;
+    logic clk, reset, sck, sck_out, finished_send, sdi, mclk, latch, oe, did_reset;
 
-    ledDriver2 dut(clk, reset, sck, sdi, rgb1, rgb2, rsel, mclk, latch, oe);
+    ledDriver2 dut(clk, reset, sck_out, sdi, rgb1, rgb2, rsel, mclk, latch, oe);
 
     initial begin
         bits <= '0;
         addr <= '0;
         reset <= '1;
+        did_reset <= '0;
+        finished_send <= '0;
 
         $readmemh("frame.txt", frame);
-
-        forever begin
-            clk = 1'b0; #5;
-            clk = 1'b1; #5;
-        end
-
-        /* we don't want sclk to like up with clk */
-        forever begin
-            sck = 1'b0; #21;
-            sck = 1'b1; #21;
-        end
     end
 
-    always_ff @(posedge clk)
-        if (reset)
+    initial forever begin
+        clk = 1'b0; #5;
+        clk = 1'b1; #5;
+    end
+
+    /* we don't want sclk to like up with clk */
+    initial forever begin
+        sck = 1'b0; #21;
+        sck = 1'b1; #21;
+    end
+
+    always_ff @(posedge clk) begin
+        did_reset <= reset;
+        if (did_reset)
             reset <= '0;
+    end
 
     always_ff @(posedge sck) begin
-        if (addr + 1 != '0) begin
-            sdi <= frame[addr++][bits];
+        if (~reset && ~finished_send) begin
+            sdi <= frame[addr][bits];
             bits <= bits == 11 ? '0 : bits + 1;
+            if (bits == 11)
+                addr <= addr + 1;
         end
+
+        if (addr == '1 && bits == 11)
+            finished_send <= '1;
     end
+
+    assign sck_out = finished_send ? '0 : sck;
 endmodule
