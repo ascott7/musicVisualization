@@ -372,3 +372,44 @@ module ram
         out <= buffer[addr];
     end
 endmodule
+
+module testbench();
+    logic [11:0] frame[0:32*32-1];
+    logic [9:0] addr;
+    logic [3:0] bits;
+    logic [2:0] rgb1, rgb2;
+    logic [3:0] rsel;
+    logic clk, reset, sck, sdi, mclk, latch, oe;
+
+    ledDriver2 dut(clk, reset, sck, sdi, rgb1, rgb2, rsel, mclk, latch, oe);
+
+    initial begin
+        bits <= '0;
+        addr <= '0;
+        reset <= '1;
+
+        $readmemh("frame.txt", frame);
+
+        forever begin
+            clk = 1'b0; #5;
+            clk = 1'b1; #5;
+        end
+
+        /* we don't want sclk to like up with clk */
+        forever begin
+            sck = 1'b0; #21;
+            sck = 1'b1; #21;
+        end
+    end
+
+    always_ff @(posedge clk)
+        if (reset)
+            reset <= '0;
+
+    always_ff @(posedge sck) begin
+        if (addr + 1 != '0) begin
+            sdi <= frame[addr++][bits];
+            bits <= bits == 11 ? '0 : bits + 1;
+        end
+    end
+endmodule
