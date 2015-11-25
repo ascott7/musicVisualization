@@ -192,7 +192,7 @@ bool scrolling_fft_generator::make_next_frame(frame& frame,
                                               vector<float>& sample)
 {
         size_t x, y;
-        unsigned order = 8*sizeof(size_t) - (__builtin_clz(frame.size()) + 1);
+        unsigned order = 8*sizeof(size_t) - (__builtin_clzl(frame.size()) + 1);
         vector<complex<float>> c_sample(1 << order);
         array<pixel, frame::HEIGHT> new_col;
 
