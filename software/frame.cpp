@@ -71,10 +71,7 @@ const pixel& frame::at(size_t x, size_t y) const
 
 frame_controller::frame_controller(frame_generator* gen)
         : gen_(gen), frame_()
-{
-    //pioInit();
-    //spiInit(244000, 0);
-}
+{}
 
 void frame_controller::set_generator(frame_generator* gen)
 {

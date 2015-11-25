@@ -15,6 +15,7 @@
 #include "frame.hpp"
 #include <iostream>
 
+#define RESET_PIN 20
 
 using namespace std;
 int main (int argc, char** argv) 
@@ -23,6 +24,14 @@ int main (int argc, char** argv)
         cout << "Incorrect parameters. Format is ./visualize filename.wav" << endl;
         return 1;
     }
+
+    pioInit();
+    spiInit(244000, 0);
+
+    digitalWrite(RESET_PIN, 1);
+    sleepMicros(1);
+    digitalWrite(RESET_PIN, 0);
+
     string filename = argv[1];
     size_t frame_rate = 16;
     float cutoff = 0.01;
