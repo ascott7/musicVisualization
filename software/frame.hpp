@@ -117,8 +117,10 @@ private:
 // trivial frame generator. Spits out frames that are all red.
 class trivial_frame_generator : public frame_generator {
 public:
-        trivial_frame_generator() = default;
+        trivial_frame_generator(pixel p);
         ~trivial_frame_generator() = default;
         bool make_next_frame(frame& frame, std::vector<float>& sample);
         unsigned get_frame_rate() const;
+private:
+        pixel p_;
 };

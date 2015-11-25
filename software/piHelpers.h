@@ -36,15 +36,6 @@
 #define SYS_TIMER_BASE          (BCM2836_PERI_BASE + 0x3000)
 #define SPIO_BASE               (BCM2836_PERI_BASE + 0x204000)
 
-// Pointer that will be memory mapped when pioInit() is called
-volatile unsigned int *gpio; //pointer to base of gpio
-
-// Pointer that will be memory mapped when pTimerInit() is called
-volatile unsigned int *sys_timer; //pointer to base of sys_timer
-
-// Pointer that will be memory mapped when spiInit() is called
-volatile unsigned int *spi0; //pointer to base of spio
-
 /////////////////////////////////////////////////////////////////////
 // Rasperry Pi Helper Functions
 /////////////////////////////////////////////////////////////////////

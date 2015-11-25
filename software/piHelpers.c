@@ -1,5 +1,14 @@
 #include "piHelpers.h"
 
+// Pointer that will be memory mapped when pioInit() is called
+volatile unsigned int *gpio; //pointer to base of gpio
+
+// Pointer that will be memory mapped when pTimerInit() is called
+volatile unsigned int *sys_timer; //pointer to base of sys_timer
+
+// Pointer that will be memory mapped when spiInit() is called
+volatile unsigned int *spi0; //pointer to base of spio
+
 void pioInit() {
   int  mem_fd;
   void *reg_map;
@@ -119,7 +128,7 @@ void sleepMicros(int micros)
     return;
   }
   sys_timer[4] = sys_timer[1] + micros;    // C1 = CLO + micros
-  sys_timer[0] = 0x2;//0b0010;                   // clear M1
+  sys_timer[0] |= 0x2;//0b0010;                   // clear M1
   while (!!(sys_timer[0] & 0x2) == 0);  // wait for M1 to go high again
 }
 
