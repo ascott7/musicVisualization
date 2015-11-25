@@ -45,7 +45,8 @@ module ledDriver2
     frame_reader fr(clk, reset, sck, sdi, cdone, addr, rpix, rdone);
     frame_writer fw(clk, reset, we, wpix, addr, fstart, fend,
                     rgb1, rgb2, rsel, mclk, latch);
-    controler ctl(clk, reset, rdone, fend, rpix, wpix, addr, fstart, we, cdone);
+    controller ctl(clk, reset, rdone, fend, rpix, wpix, 
+                   addr, fstart, we, cdone);
 
 endmodule
 
@@ -75,7 +76,7 @@ module frame_reader
                     input  logic __sck, 
                     input  logic __sdi,
                     input  logic cdone,
-                    input  logic [9:0] raddr,
+                    input  logic [FRAME_ORDER-1:0] raddr,
                     output logic [3*CDEPTH-1:0] pix_out,
                     output logic rdone);
 
@@ -218,7 +219,7 @@ module frame_writer
     ram #(3*CDEPTH, FRAME_ORDER-1) hi_ram(clk, hi_we, addr, wpix, hi_pix);
 
     assign addr = state == WAIT ? waddr[FRAME_ORDER-2:0] : {col, row};
-    assign low_we = we && waddr[FRAME_ORDER-1];
+    assign lo_we = we && waddr[FRAME_ORDER-1];
     assign hi_we = we && ~waddr[FRAME_ORDER-1];
 
     always_ff @(posedge clk) begin
@@ -306,7 +307,7 @@ module controller
     typedef enum logic [2:0] {RESET, WRITE, NEW_FRAME, COPY, WAIT} state_t;
 
     state_t state, next_state;
-    logic saw_done, cdone;
+    logic saw_done;
 
     always_ff @(posedge clk) begin
         if (reset) begin
@@ -320,7 +321,7 @@ module controller
 
             if (state == COPY)
                 saw_done <= '0;
-            else if (done)
+            else if (rdone)
                 saw_done <= '1;
         end
     end
@@ -365,8 +366,9 @@ module ram
 
     logic [WSIZE-1:0] buffer[0:2**ORDER-1];
 
-    assign out = buffer[addr];
-    always_ff @(posedge clk)
+    always_ff @(posedge clk) begin
         if (we)
-            buffer[addr] = in;
+            buffer[addr] <= in;
+        out <= buffer[addr];
+    end
 endmodule
