@@ -1,7 +1,7 @@
 /**
  * \file frame.cpp
  *
- * \author Eric Mueller -- emueller@hmc.edu
+ * \authors Eric Mueller -- emueller@hmc.edu, Andrew Scott -- ascott@hmc.edu
  *
  * \brief Frame management implementation.
  */
@@ -138,13 +138,9 @@ void frame_controller::write_frame() const
         // column, starting with column 0 up to 31. For each individual pixel
         // at (row, column), we do 3 sends, each 8 bits long representing in 
         // order, red, green and then blue for that pixel. This will require
-        // a minimum of 32 * 32 * 3 * 8 = 24,568 clock cycles to send a new
+        // a minimum of 32 * 32 * 3 * 4 = 12,288 clock cycles to send a new
         // frame.
 
-        // We may want to consider adding a LOAD signal that is high for the 
-        // duration of the transfer or right before the transfer so that the
-        // FPGA knows it should be loading data (this will require more 
-        // thought).
         size_t x, y;
         uint8_t r0, g0, b0, r1, g1, b1;
         uint8_t byte1, byte2, byte3;
@@ -159,6 +155,8 @@ void frame_controller::write_frame() const
                 byte1 = reverse(uint8_t(g0 << 4 | r0));
                 byte2 = reverse(uint8_t(r1 << 4 | b0));
                 byte3 = reverse(uint8_t(b1 << 4 | g1));
+                // print statements to check that the above conversions
+                // are working properly
                 // printf("red0 %02x green0 %02X\n", r0, g0);
                 // printf("combined %02X\n", byte1);
                 // printf("blue0 %02x red1 %02X\n", b0, r1);
