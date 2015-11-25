@@ -16,7 +16,7 @@ fft_test: fft_test.cpp fft.hpp
 fft_test2: wav_reader.o fft.hpp fft_test2.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
-visualize: visualize.cpp frame.o wav_reader.o
+visualize: visualize.cpp frame.o wav_reader.o piHelpers.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 test: fft_test
@@ -27,5 +27,6 @@ clean:
 
 
 wav_reader.o: wav_reader.hpp wav_reader.cpp
-frame.o: frame.cpp frame.hpp
+frame.o: frame.hpp frame.cpp
+piHelpers.o: piHelpers.h piHelpers.c
 #visualize.o: visualize.cpp
