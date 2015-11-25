@@ -190,7 +190,7 @@ endmodule
 module frame_writer
                   #(parameter CDEPTH=4,
                     parameter FRAME_ORDER=10,
-                    parameter MCLK_DIV_BITS=5)
+                    parameter MCLK_DIV_BITS=7)
                    (input  logic clk,
                     input  logic reset,
                     input  logic we,
