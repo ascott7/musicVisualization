@@ -190,7 +190,7 @@ endmodule
 module frame_writer
                   #(parameter CDEPTH=4,
                     parameter FRAME_ORDER=10,
-                    parameter MCLK_DIV_BITS=3)
+                    parameter MCLK_DIV_BITS=5)
                    (input  logic clk,
                     input  logic reset,
                     input  logic we,
@@ -204,15 +204,15 @@ module frame_writer
                     output logic mclk,
                     output logic latch);
 
-    typedef enum logic [1:0] {WAIT, WRITE_ROW, LATCH, DONE} state_t;
+    typedef enum logic [2:0] {WAIT, WRITE_ROW, LATCH, ROW_END, DONE} state_t;
 
     state_t state, next_state;
     logic [4:0] col;
     logic [3*CDEPTH-1:0] lo_pix, hi_pix;
-    logic [CDEPTH-1:0] pwm_cnt;
     logic [MCLK_DIV_BITS-1:0] mclk_div;
     logic [FRAME_ORDER-2:0] addr;
     logic lo_we, hi_we;
+    logic [5:0] latch_count;
 
     /* 
      * we use seperate rams for the top and bottom halves of the frame so we
@@ -229,28 +229,22 @@ module frame_writer
         if (reset) begin
             row <= '0;
             col <= '0;
-            pwm_cnt <= '0;
             mclk_div <= '0;
             state <= WAIT;
+            latch_count <= '0;
         end else begin
             state <= next_state;
 
             if (state == WRITE_ROW) begin
                 mclk_div <= mclk_div + 1'b1;
 
-                /* increment col on rising edge of mclk */
-                if (mclk_div == 1 << (MCLK_DIV_BITS - 1) - 1)
+                /* increment col on falling edge of mclk */
+                if (mclk_div == '1)
                     col <= col + 1'b1;
 
-                /*
-                 * we need to increment pwm_cnt one cycle earlier than when cols
-                 * wraps around, as otherwise they will never both be '1 at the
-                 * same time, which is the condition on which we transition from
-                 * the WRITE_ROW to LATCH states
-                 */
-                if (col == '1 - 1'b1)
-                    pwm_cnt <= pwm_cnt + 1'b1;
             end else if (state == LATCH)
+                latch_count <= latch_count + 1'b1;
+            else if (state == ROW_END)
                 row <= row + 1'b1;
         end
     end
@@ -258,8 +252,9 @@ module frame_writer
     always_comb
         case (state)
         WAIT: next_state = fstart ? WRITE_ROW : WAIT;
-        WRITE_ROW: next_state = pwm_cnt == '1 && col == '1 ? LATCH : WRITE_ROW;
-        LATCH: next_state = row == '1 ? DONE : WRITE_ROW;
+        WRITE_ROW: next_state = col == '1 && mclk_div == '1 ? LATCH : WRITE_ROW;
+        LATCH: next_state = latch_count == '1 ? ROW_END : LATCH;
+        ROW_END: next_state = row == '1 ? DONE : WRITE_ROW;
         DONE: next_state = WAIT;
         endcase
 
@@ -267,13 +262,15 @@ module frame_writer
     assign latch = state == LATCH;
     assign fend = state == DONE;
 
-    assign lo_rgb[0] = lo_pix[CDEPTH-1:0]  > pwm_cnt;
-    assign lo_rgb[1] = lo_pix[2*CDEPTH-1:CDEPTH] > pwm_cnt;
-    assign lo_rgb[2] = lo_pix[3*CDEPTH-1:2*CDEPTH] > pwm_cnt;
-
-    assign hi_rgb[0] = hi_pix[CDEPTH-1:0] > pwm_cnt;
-    assign hi_rgb[1] = hi_pix[2*CDEPTH-1:CDEPTH] > pwm_cnt;
-    assign hi_rgb[2] = hi_pix[3*CDEPTH-1:2*CDEPTH] > pwm_cnt;
+    /*
+     * XXX: still need to implement PWM
+     */
+    assign lo_rgb[0] = lo_pix[CDEPTH-1:0] > '0;
+    assign lo_rgb[1] = lo_pix[2*CDEPTH-1:CDEPTH] > '0;
+    assign lo_rgb[2] = lo_pix[3*CDEPTH-1:2*CDEPTH] > '0;
+    assign hi_rgb[0] = hi_pix[CDEPTH-1:0] > '0;
+    assign hi_rgb[1] = hi_pix[2*CDEPTH-1:CDEPTH] > '0;
+    assign hi_rgb[2] = hi_pix[3*CDEPTH-1:2*CDEPTH] > '0;
 endmodule
 
 /**
