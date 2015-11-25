@@ -1,3 +1,6 @@
+#ifndef PIHELPERS_H_INCLUDED
+#define PIHELPERS_H_INCLUDED 1
+
 #include <sys/mman.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -7,8 +10,6 @@
 /////////////////////////////////////////////////////////////////////
 // Constants
 /////////////////////////////////////////////////////////////////////
-
-#define LEDPIN 21
 
 // GPIO FSEL Types
 #define INPUT  0
@@ -232,3 +233,4 @@ double getVoltage()
   result |= two;
   return (double)(result * 5) / 1024;
 }
+#endif // PIHELPERS_H_INCLUDED

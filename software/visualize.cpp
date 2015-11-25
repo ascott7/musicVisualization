@@ -13,6 +13,7 @@
 
 #include "wav_reader.hpp"
 #include "frame.hpp"
+#include "piHelpers.h"
 #include <iostream>
 
 #define RESET_PIN 20
@@ -35,9 +36,9 @@ int main (int argc, char** argv)
     string filename = argv[1];
     size_t frame_rate = 16;
     float cutoff = 0.01;
-    scrolling_fft_generator* gen = new scrolling_fft_generator(frame_rate, cutoff);
-    //trivial_frame_generator gen;
-    frame_controller controller = frame_controller(gen);
+    //scrolling_fft_generator* gen = new scrolling_fft_generator(frame_rate, cutoff);
+    trivial_frame_generator gen;
+    frame_controller controller = frame_controller(&gen);
     // controller.write_frame();
     controller.play_song(filename);
 
