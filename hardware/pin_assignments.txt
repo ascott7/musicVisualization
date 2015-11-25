@@ -1,0 +1,15 @@
+pin assignments for matrix:
+
+r1 59
+g1 60
+b1 64
+r2 65
+g2 66
+b2 67
+mclk 51
+latch 104
+oe 105
+a 98
+b 99
+c 100
+d 103
