@@ -72,17 +72,16 @@ const pixel& frame::at(size_t x, size_t y) const
 
 void frame::write() const
 {
-        // SPI stuff. still need to decide on the on-the-wire frame
-        // format. need to be careful b/c the LED matrix only has 4 bit color
-        // channel depth, but our pixels use 8 bit color channels
-
         // For now the format for the spi communication will involve sending
         // row by row, starting with the first row. For each row, we send each
-        // column, starting with column 0 up to 31. For each individual pixel
-        // at (row, column), we do 3 sends, each 8 bits long representing in 
-        // order, red, green and then blue for that pixel. This will require
-        // a minimum of 32 * 32 * 3 * 4 = 12,288 clock cycles to send a new
-        // frame.
+        // column, starting with column 0 up to 31.
+        //
+        // The FPGA expects the color channels of each pixel to be 4 bits,
+        // but this means pixels don't line up on byte boundaries. The Pi's
+        // SPI hardware sends bytes in MSB order, but this means that if we
+        // a pixel crosses a byte boundary it will not be contiguous on
+        // the SPI bus. For this reason we send pixels in LSB order.
+        // This requires some nastyness.
 
         size_t x, y;
         uint8_t r0, g0, b0, r1, g1, b1;
