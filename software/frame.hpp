@@ -46,8 +46,15 @@ public:
         pixel& at(size_t x, size_t y);
         const pixel& at(size_t x, size_t y) const;
 
+        // write the contents of the frame over SPI to the FPGA
+        void write() const;
+
         static constexpr unsigned WIDTH = 32;
         static constexpr unsigned HEIGHT = 32;
+
+private:
+        // helper function to reverse a byte
+        uint8_t reverse(uint8_t byte) const;
 };
 
 // abstract base class for all frame generating things. music visualizers
@@ -80,12 +87,7 @@ private:
         bool make_next_frame(const wav_reader& song,
                              std::chrono::microseconds start);
 
-        // write the next frame out to the FPGA via SPI
-        void write_frame() const;
         std::chrono::microseconds get_frame_interval() const;
-
-        // helper function to reverse a byte
-        uint8_t reverse(uint8_t byte) const;
 
         using clock_t = std::chrono::high_resolution_clock;
 

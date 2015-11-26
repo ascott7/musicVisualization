@@ -69,6 +69,59 @@ const pixel& frame::at(size_t x, size_t y) const
         return array::at(x*WIDTH + y);
 }
 
+void frame::write() const
+{
+        // SPI stuff. still need to decide on the on-the-wire frame
+        // format. need to be careful b/c the LED matrix only has 4 bit color
+        // channel depth, but our pixels use 8 bit color channels
+
+        // For now the format for the spi communication will involve sending
+        // row by row, starting with the first row. For each row, we send each
+        // column, starting with column 0 up to 31. For each individual pixel
+        // at (row, column), we do 3 sends, each 8 bits long representing in 
+        // order, red, green and then blue for that pixel. This will require
+        // a minimum of 32 * 32 * 3 * 4 = 12,288 clock cycles to send a new
+        // frame.
+
+        size_t x, y;
+        uint8_t r0, g0, b0, r1, g1, b1;
+        uint8_t byte1, byte2, byte3;
+        for (y = 0; y < HEIGHT; ++y) {
+            for (x = 0; x < WIDTH; x += 2) {
+                r0 = at(x, y).red() / 16;
+                g0 = at(x, y).green() / 16;
+                b0 = at(x, y).blue() / 16;
+                r1 = at(x + 1, y).red() / 16;
+                g1 = at(x + 1, y).green() / 16;
+                b1 = at(x + 1, y).blue() / 16;
+                byte1 = reverse(uint8_t(g0 << 4 | r0));
+                byte2 = reverse(uint8_t(r1 << 4 | b0));
+                byte3 = reverse(uint8_t(b1 << 4 | g1));
+                // print statements to check that the above conversions
+                // are working properly
+                // printf("red0 %02x green0 %02X\n", r0, g0);
+                // printf("combined %02X\n", byte1);
+                // printf("blue0 %02x red1 %02X\n", b0, r1);
+                // printf("combined %02X\n", byte2);
+                // printf("green1 %02x blue1 %02X\n", g1, b1);
+                // printf("combined %02X\n", byte3);
+                spiSendReceive(byte1);
+                spiSendReceive(byte2);
+                spiSendReceive(byte3);
+            }
+        }
+}
+
+//http://stackoverflow.com/questions/2602823/in-c-c-whats-the-simplest-way-to
+// -reverse-the-order-of-bits-in-a-byte
+uint8_t frame::reverse(uint8_t byte) const
+{
+   byte = (byte & 0xF0) >> 4 | (byte & 0x0F) << 4;
+   byte = (byte & 0xCC) >> 2 | (byte & 0x33) << 2;
+   byte = (byte & 0xAA) >> 1 | (byte & 0x55) << 1;
+   return byte;
+}
+
 frame_controller::frame_controller(frame_generator* gen)
         : gen_(gen), frame_()
 {}
@@ -105,7 +158,7 @@ void frame_controller::play_song(const string& fname)
         } else {
                 start = clock_t::now();
                 for (;;) {
-                        write_frame();
+                        frame_.write();
                         next_start = start + ++current_frame*interval;
                         offset = duration_cast<microseconds>(next_start - start);
                         if (!make_next_frame(song, offset)) {
@@ -124,60 +177,6 @@ bool frame_controller::make_next_frame(const wav_reader& song,
 {
         vector<float> sample = song.get_range(start, get_frame_interval());
         return gen_->make_next_frame(frame_, sample);
-}
-
-void frame_controller::write_frame() const
-{
-        // SPI stuff. still need to decide on the on-the-wire frame
-        // format. need to be careful b/c the LED matrix only has 4 bit color
-        // channel depth, but our pixels use 8 bit color channels
-
-        // For now the format for the spi communication will involve sending
-        // row by row, starting with the first row. For each row, we send each
-        // column, starting with column 0 up to 31. For each individual pixel
-        // at (row, column), we do 3 sends, each 8 bits long representing in 
-        // order, red, green and then blue for that pixel. This will require
-        // a minimum of 32 * 32 * 3 * 4 = 12,288 clock cycles to send a new
-        // frame.
-
-        size_t x, y;
-        uint8_t r0, g0, b0, r1, g1, b1;
-        uint8_t byte1, byte2, byte3;
-        for (y = 0; y < frame::HEIGHT; ++y) {
-            for (x = 0; x < frame::WIDTH; x += 2) {
-                r0 = frame_.at(x, y).red() / 16;
-                g0 = frame_.at(x, y).green() / 16;
-                b0 = frame_.at(x, y).blue() / 16;
-                r1 = frame_.at(x + 1, y).red() / 16;
-                g1 = frame_.at(x + 1, y).green() / 16;
-                b1 = frame_.at(x + 1, y).blue() / 16;
-                byte1 = reverse(uint8_t(g0 << 4 | r0));
-                byte2 = reverse(uint8_t(r1 << 4 | b0));
-                byte3 = reverse(uint8_t(b1 << 4 | g1));
-                // print statements to check that the above conversions
-                // are working properly
-                // printf("red0 %02x green0 %02X\n", r0, g0);
-                // printf("combined %02X\n", byte1);
-                // printf("blue0 %02x red1 %02X\n", b0, r1);
-                // printf("combined %02X\n", byte2);
-                // printf("green1 %02x blue1 %02X\n", g1, b1);
-                // printf("combined %02X\n", byte3);
-                spiSendReceive(byte1);
-                spiSendReceive(byte2);
-                spiSendReceive(byte3);
-            }
-        }
-}
-
-
-//http://stackoverflow.com/questions/2602823/in-c-c-whats-the-simplest-way-to
-// -reverse-the-order-of-bits-in-a-byte
-uint8_t frame_controller::reverse(uint8_t byte) const
-{
-   byte = (byte & 0xF0) >> 4 | (byte & 0x0F) << 4;
-   byte = (byte & 0xCC) >> 2 | (byte & 0x33) << 2;
-   byte = (byte & 0xAA) >> 1 | (byte & 0x55) << 1;
-   return byte;
 }
 
 scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate, float cutoff)
