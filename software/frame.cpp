@@ -9,6 +9,7 @@
 #include "fft.hpp"
 #include "frame.hpp"
 #include "piHelpers.h"
+#include "util.hpp"
 
 #include <algorithm>
 #include <cassert>
@@ -94,9 +95,9 @@ void frame::write() const
                 r1 = at(x + 1, y).red() / 16;
                 g1 = at(x + 1, y).green() / 16;
                 b1 = at(x + 1, y).blue() / 16;
-                byte1 = reverse(uint8_t(g0 << 4 | r0));
-                byte2 = reverse(uint8_t(r1 << 4 | b0));
-                byte3 = reverse(uint8_t(b1 << 4 | g1));
+                byte1 = bit_reverse(uint8_t(g0 << 4 | r0));
+                byte2 = bit_reverse(uint8_t(r1 << 4 | b0));
+                byte3 = bit_reverse(uint8_t(b1 << 4 | g1));
                 // print statements to check that the above conversions
                 // are working properly
                 // printf("red0 %02x green0 %02X\n", r0, g0);
@@ -110,16 +111,6 @@ void frame::write() const
                 spiSendReceive(byte3);
             }
         }
-}
-
-//http://stackoverflow.com/questions/2602823/in-c-c-whats-the-simplest-way-to
-// -reverse-the-order-of-bits-in-a-byte
-uint8_t frame::reverse(uint8_t byte) const
-{
-   byte = (byte & 0xF0) >> 4 | (byte & 0x0F) << 4;
-   byte = (byte & 0xCC) >> 2 | (byte & 0x33) << 2;
-   byte = (byte & 0xAA) >> 1 | (byte & 0x55) << 1;
-   return byte;
 }
 
 frame_controller::frame_controller(frame_generator* gen)

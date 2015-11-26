@@ -51,10 +51,6 @@ public:
 
         static constexpr unsigned WIDTH = 32;
         static constexpr unsigned HEIGHT = 32;
-
-private:
-        // helper function to reverse a byte
-        uint8_t reverse(uint8_t byte) const;
 };
 
 // abstract base class for all frame generating things. music visualizers

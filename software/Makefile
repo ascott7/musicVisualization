@@ -10,7 +10,7 @@ all: $(TARGETS)
 wav_reader_test: wav_reader.o wav_reader_test.cpp
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
-fft_test: fft_test.cpp fft.hpp
+fft_test: fft_test.cpp fft.hpp util.hpp
 	$(CXX) $(CXXFLAGS) -o $@ $< -lm
 
 # XXX: fix me broken
@@ -27,6 +27,6 @@ clean:
 	rm -f $(TARGETS) *.o
 
 wav_reader.o: wav_reader.hpp wav_reader.cpp
-frame.o: frame.hpp frame.cpp
+frame.o: frame.hpp frame.cpp fft.hpp util.hpp
 piHelpers.o: piHelpers.c piHelpers.h
 	$(CXX) $(CXXFLAGS) -c $< -o $@
