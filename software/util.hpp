@@ -43,17 +43,6 @@ static uint8_t bit_reverse_byte(uint8_t byte)
 
         return bit_rev_lut[byte];
 }
-
-// alternative non-lut version by if lut proves to be too slow 
-//http://stackoverflow.com/questions/2602823/in-c-c-whats-the-simplest-way-to
-// -reverse-the-order-of-bits-in-a-byte
-/* static uint8_t bit_reverse_byte(uint8_t byte) const
-{
-   byte = (byte & 0xF0) >> 4 | (byte & 0x0F) << 4;
-   byte = (byte & 0xCC) >> 2 | (byte & 0x33) << 2;
-   byte = (byte & 0xAA) >> 1 | (byte & 0x55) << 1;
-   return byte;
-} */
 }; // namespace detail
 
 // reverse the bits in any integral type
