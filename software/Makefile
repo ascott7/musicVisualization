@@ -5,7 +5,7 @@ CXXFLAGS = $(__FLAGS) -std=c++11
 CC=clang
 CFLAGS= $(__FLAGS) -std=c99
 
-TARGETS=wav_reader_test fft_test visualize
+TARGETS=wav_reader_test fft_test visualize fft_test2
 
 export MAKEFLAGS="-j 4"
 
@@ -17,9 +17,10 @@ wav_reader_test: wav_reader.o wav_reader_test.cpp
 fft_test: fft_test.cpp fft.hpp util.hpp
 	$(CXX) $(CXXFLAGS) -o $@ $< -lm
 
-# XXX: fix me broken
-#fft_test2: fft_test2.cpp wav_reader.o fft.hpp fft_test2.cpp
-#	$(CXX) $(CXXFLAGS) -o $@ $^
+# clang doesn't want an hpp and a .o file both at once, but the hpp is a
+# dependency so we can't use $^ (there's probably a cleaner way to do this)
+fft_test2: fft_test2.cpp wav_reader.o fft.hpp
+	$(CXX) $(CXXFLAGS) -o $@ fft_test2.cpp wav_reader.o
 
 visualize: visualize.cpp frame.o wav_reader.o piHelpers.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
