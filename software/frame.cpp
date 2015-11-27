@@ -135,6 +135,8 @@ void frame_generator::play_song(const string& fname)
         if (pid < 0)
                 throw runtime_error("fork failed");
         else if (pid == 0) {
+                // configure the pi to play audio through the audio jack
+                system("amixer cset numid=3 1");
                 system(("aplay " + fname).c_str());
                 exit(0);
         } else {
