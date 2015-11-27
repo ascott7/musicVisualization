@@ -15,6 +15,7 @@
 #include <cassert>
 #include <complex>
 #include <cstdlib>
+#include <iterator>
 #include <limits>
 #include <stdexcept>
 #include <thread>
@@ -158,19 +159,40 @@ scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate, float cuto
         : frame_rate_(frame_rate), cutoff_(cutoff)
 {}
 
+// get the next power of 2 above v, unless v is a power of 2, in which case
+// return v. If v is zero, we return 0 because even though that's mathematically
+// wrong it's convenient.
+//
+// taken from here:
+// http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2Float
+static size_t next_power_of2_or_zero(size_t v)
+{
+        size_t t;
+        float f;
+
+        if (v > 1) {
+                f = (float)v;
+                t = 1U << ((*(unsigned int *)&f >> 23) - 0x7f);
+                return t << (t < v);
+        } else
+                return v;
+}
+
 bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
                                               std::chrono::microseconds start,
                                               frame& frame)
 {
         size_t x, y;
-        unsigned order = 8*sizeof(size_t) - (__builtin_clzl(frame.size())+1);
-        vector<complex<float>> c_sample(1 << order);
         array<pixel, frame::HEIGHT> new_col;
         vector<float> sample = song.get_range(start,
                                               start + get_frame_interval());
+        size_t csize = next_power_of2_or_zero(sample.size());
+        vector<complex<float>> c_sample;
 
-        // copy to complex array and take the fft
-        copy(sample.begin(), sample.end(), c_sample.begin());
+        // copy the real sample to a complex array and 0-pad it to
+        // a power of 2 size
+        copy(sample.begin(), sample.end(), back_inserter(c_sample));
+        fill_n(back_inserter(c_sample), csize - c_sample.size(), 0);
         if (fft(c_sample))
                 return false;
 
