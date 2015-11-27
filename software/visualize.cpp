@@ -29,7 +29,8 @@ int main (int argc, char** argv)
     pioInit();
     pTimerInit();
     spiInit(244000, 0);
-    
+
+    pinMode(RESET_PIN, OUTPUT);
     digitalWrite(RESET_PIN, 1);
     digitalWrite(RESET_PIN, 0);
 
