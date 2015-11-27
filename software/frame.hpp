@@ -94,7 +94,7 @@ protected:
 private:
         // convert a sample to a column of pixels to write out next
         std::array<pixel, frame::HEIGHT>
-        create_next_column(std::vector<std::complex<float>>& sample);
+        make_next_column(std::vector<std::complex<float>>& sample);
 
         // convert a normalized, binned, spectrum sample to a pixel value.
         pixel normal_to_pixel(float norm);

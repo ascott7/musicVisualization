@@ -196,7 +196,7 @@ bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
         if (fft(c_sample))
                 return false;
 
-        new_col = create_next_column(c_sample);
+        new_col = make_next_column(c_sample);
 
         for (y = 0; y < frame::HEIGHT; ++y) {
                 for (x = frame::WIDTH; x-- > 1;)
@@ -208,7 +208,7 @@ bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
 }
 
 array<pixel, frame::HEIGHT>
-scrolling_fft_generator::create_next_column(vector<complex<float>>& spectrum)
+scrolling_fft_generator::make_next_column(vector<complex<float>>& spectrum)
 {
         array<pixel, frame::HEIGHT> binned;
         complex<float> max, sum;
