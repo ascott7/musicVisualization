@@ -60,6 +60,10 @@ class frame_generator {
 public:
         virtual ~frame_generator() = default;
 
+        // play and visualize a song.
+        void play_song(const std::string& fname);
+
+protected:
         // generate the next frame to display based on a set of samples
         // for the next time slice.
         virtual bool
@@ -67,9 +71,6 @@ public:
                         std::chrono::microseconds start,
                         frame& f) = 0;
         virtual unsigned get_frame_rate() const = 0;
-
-        // play and visualize a song.
-        void play_song(const std::string& fname);
 
         std::chrono::microseconds get_frame_interval() const;
 
@@ -82,11 +83,14 @@ class scrolling_fft_generator : public frame_generator {
 public:
         scrolling_fft_generator(unsigned frame_rate, float cutoff);
         ~scrolling_fft_generator() = default;
+
+protected:
         bool make_next_frame(const wav_reader& song,
                              std::chrono::microseconds start,
                              frame& frame);
 
         unsigned get_frame_rate() const;
+
 private:
         // convert a sample to a column of pixels to write out next
         std::array<pixel, frame::HEIGHT>
@@ -104,10 +108,13 @@ class trivial_frame_generator : public frame_generator {
 public:
         trivial_frame_generator(pixel p);
         ~trivial_frame_generator() = default;
+
+protected:
         bool make_next_frame(const wav_reader& song,
                              std::chrono::microseconds start,
                              frame& frame);
         unsigned get_frame_rate() const;
+
 private:
         pixel p_;
 };
