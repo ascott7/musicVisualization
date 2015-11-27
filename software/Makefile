@@ -1,5 +1,9 @@
+__FLAGS = -g -Wall -Wextra -pedantic -O3
+
 CXX = clang++
-CXXFLAGS = -g -std=c++11 -Wall -Wextra -pedantic -O3
+CXXFLAGS = $(__FLAGS) -std=c++11
+CC=clang
+CFLAGS= $(__FLAGS) -std=c99
 
 TARGETS=wav_reader_test fft_test visualize
 
@@ -29,4 +33,3 @@ clean:
 wav_reader.o: wav_reader.hpp wav_reader.cpp
 frame.o: frame.hpp frame.cpp fft.hpp util.hpp
 piHelpers.o: piHelpers.c piHelpers.h
-	$(CXX) $(CXXFLAGS) -c $< -o $@

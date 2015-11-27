@@ -1,7 +1,9 @@
 #ifndef PIHELPERS_H_INCLUDED
 #define PIHELPERS_H_INCLUDED 1
 
-#ifdef __arm__
+#ifdef __cplusplus
+extern "C" {
+#endif
 
 #include <sys/mman.h>
 #include <stdio.h>
@@ -42,6 +44,8 @@
 /////////////////////////////////////////////////////////////////////
 // Rasperry Pi Helper Functions
 /////////////////////////////////////////////////////////////////////
+
+#ifdef __arm__
 
 void pioInit();
 
@@ -89,5 +93,9 @@ static inline double getVoltage(){return 0;}
 
 #endif /* ifdef __arm__ */
 
+#ifdef __cplusplus
+} // end of extern "C"
+#endif
+        
 #endif // PIHELPERS_H_INCLUDED
 
