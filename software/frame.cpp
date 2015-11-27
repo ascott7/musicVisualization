@@ -112,31 +112,23 @@ void frame::write() const
         }
 }
 
-frame_controller::frame_controller(frame_generator* gen)
-        : gen_(gen), frame_()
-{}
-
-void frame_controller::set_generator(frame_generator* gen)
+microseconds frame_generator::get_frame_interval() const
 {
-        gen_ = gen;
+        return microseconds(1000*1000/get_frame_rate());
 }
 
-microseconds frame_controller::get_frame_interval() const
-{
-        return microseconds(1000*1000/gen_->get_frame_rate());
-}
-
-void frame_controller::play_song(const string& fname)
+void frame_generator::play_song(const string& fname)
 {
         wav_reader song(fname);
         clock_t::time_point start, next_start;
-        size_t current_frame = 0;
+        size_t frame_count = 0;
         microseconds offset, interval = get_frame_interval();
         pid_t pid;
+        frame f;
 
         // make the first frame before we start playing the song because
         // it's comutationally intensive
-        if (!make_next_frame(song, microseconds(0)))
+        if (!make_next_frame(song, microseconds(0), f))
                 throw runtime_error("failed to generate first frame");
         
         pid = fork();
@@ -148,13 +140,11 @@ void frame_controller::play_song(const string& fname)
         } else {
                 start = clock_t::now();
                 for (;;) {
-                        frame_.write();
-                        next_start = start + ++current_frame*interval;
+                        f.write();
+                        next_start = start + ++frame_count*interval;
                         offset = duration_cast<microseconds>(next_start - start);
-                        if (!make_next_frame(song, offset)) {
-                                printf("break it down\n");
+                        if (!make_next_frame(song, offset, f))
                                 break;
-                        }
                         this_thread::sleep_until(next_start);
                 }
         }
@@ -162,27 +152,20 @@ void frame_controller::play_song(const string& fname)
         waitpid(pid, NULL, WEXITED);
 }
 
-bool frame_controller::make_next_frame(const wav_reader& song,
-                                       microseconds start)
-{
-        vector<float> sample = song.get_range(start, get_frame_interval());
-        return gen_->make_next_frame(frame_, sample);
-}
-
 scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate, float cutoff)
-        : frame_rate_(frame_rate), last_frame_(), cutoff_(cutoff)
-{
-        // zero the frame
-        last_frame_.fill(pixel());
-}
+        : frame_rate_(frame_rate), cutoff_(cutoff)
+{}
 
-bool scrolling_fft_generator::make_next_frame(frame& frame,
-                                              vector<float>& sample)
+bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
+                                              std::chrono::microseconds start,
+                                              frame& frame)
 {
         size_t x, y;
-        unsigned order = 8*sizeof(size_t) - (__builtin_clzl(frame.size()) + 1);
+        unsigned order = 8*sizeof(size_t) - (__builtin_clzl(frame.size())+1);
         vector<complex<float>> c_sample(1 << order);
         array<pixel, frame::HEIGHT> new_col;
+        vector<float> sample = song.get_range(start,
+                                              start + get_frame_interval());
 
         // copy to complex array and take the fft
         copy(sample.begin(), sample.end(), c_sample.begin());
@@ -201,8 +184,7 @@ bool scrolling_fft_generator::make_next_frame(frame& frame,
 }
 
 array<pixel, frame::HEIGHT>
-scrolling_fft_generator::create_next_column(
-        vector<complex<float>>& spectrum)
+scrolling_fft_generator::create_next_column(vector<complex<float>>& spectrum)
 {
         array<pixel, frame::HEIGHT> binned;
         complex<float> max, sum;
@@ -259,10 +241,12 @@ trivial_frame_generator::trivial_frame_generator(pixel p)
         : p_(p)
 {}
 
-bool trivial_frame_generator::make_next_frame(frame& frame,
-                                              vector<float>& sample)
+bool trivial_frame_generator::make_next_frame(const wav_reader& song,
+                                              std::chrono::microseconds start,
+                                              frame& frame)
 {
-        (void)sample;
+        (void)song;
+        (void)start;
 
         // make an frame of all the same pixel, just for testing
         fill(frame.begin(), frame.end(), p_);
