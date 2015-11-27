@@ -1,5 +1,8 @@
 #ifndef PIHELPERS_H_INCLUDED
 #define PIHELPERS_H_INCLUDED 1
+
+#ifdef __arm__
+
 #include <sys/mman.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -70,5 +73,21 @@ char spiSendReceive(char send);
 
     
 double getVoltage();
+
+#else /* ifdef __arm__ */
+
+static inline void pioInit(){}
+static inline void pTimerInit(){}
+static inline void pinMode(int pin, int function){(void)pin;(void)function;}
+static inline void digitalWrite(int pin, int val){(void)pin;(void)val;}
+static inline int digitalRead(int pin){(void)pin;return 0;}
+static inline void sleepMicros(int micros){(void)micros;}
+static inline void sleepMillis(int millis){(void)millis;}
+static inline void spiInit(int freq, int settings){(void)freq;(void)settings;}
+static inline char spiSendReceive(char send){(void)send;return 0;}
+static inline double getVoltage(){return 0;}
+
+#endif /* ifdef __arm__ */
+
 #endif // PIHELPERS_H_INCLUDED
 

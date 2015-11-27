@@ -1,5 +1,7 @@
 #include "piHelpers.h"
 
+#ifdef __arm__
+
 // Pointer that will be memory mapped when pioInit() is called
 volatile unsigned int *gpio; //pointer to base of gpio
 
@@ -194,3 +196,5 @@ double getVoltage()
   result |= two;
   return (double)(result * 5) / 1024;
 }
+
+#endif /* ifdef __arm__ */
