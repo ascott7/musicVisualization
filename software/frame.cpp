@@ -9,11 +9,13 @@
 #include "fft.hpp"
 #include "frame.hpp"
 #include "piHelpers.h"
+#include "util.hpp"
 
 #include <algorithm>
 #include <cassert>
 #include <complex>
 #include <cstdlib>
+#include <iterator>
 #include <limits>
 #include <stdexcept>
 #include <thread>
@@ -69,89 +71,33 @@ const pixel& frame::at(size_t x, size_t y) const
         return array::at(x*WIDTH + y);
 }
 
-frame_controller::frame_controller(frame_generator* gen)
-        : gen_(gen), frame_()
-{}
-
-void frame_controller::set_generator(frame_generator* gen)
+void frame::write() const
 {
-        gen_ = gen;
-}
-
-microseconds frame_controller::get_frame_interval() const
-{
-        return microseconds(1000*1000/gen_->get_frame_rate());
-}
-
-void frame_controller::play_song(const string& fname)
-{
-        wav_reader song(fname);
-        clock_t::time_point start, next_start;
-        size_t current_frame = 0;
-        microseconds offset, interval = get_frame_interval();
-        pid_t pid;
-
-        // make the first frame before we start playing the song because
-        // it's comutationally intensive
-        if (!make_next_frame(song, microseconds(0)))
-                throw runtime_error("failed to generate first frame");
-        
-        pid = fork();
-        if (pid < 0)
-                throw runtime_error("fork failed");
-        else if (pid == 0) {
-                system(("aplay " + fname).c_str());
-                exit(0);
-        } else {
-                start = clock_t::now();
-                for (;;) {
-                        write_frame();
-                        next_start = start + ++current_frame*interval;
-                        offset = duration_cast<microseconds>(next_start - start);
-                        if (!make_next_frame(song, offset))
-                                break;
-                        this_thread::sleep_until(next_start);
-                }
-        }
-
-        waitpid(pid, NULL, WEXITED);
-}
-
-bool frame_controller::make_next_frame(const wav_reader& song,
-                                       microseconds start)
-{
-        vector<float> sample = song.get_range(start, get_frame_interval());
-        return gen_->make_next_frame(frame_, sample);
-}
-
-void frame_controller::write_frame() const
-{
-        // SPI stuff. still need to decide on the on-the-wire frame
-        // format. need to be careful b/c the LED matrix only has 4 bit color
-        // channel depth, but our pixels use 8 bit color channels
-
         // For now the format for the spi communication will involve sending
         // row by row, starting with the first row. For each row, we send each
-        // column, starting with column 0 up to 31. For each individual pixel
-        // at (row, column), we do 3 sends, each 8 bits long representing in 
-        // order, red, green and then blue for that pixel. This will require
-        // a minimum of 32 * 32 * 3 * 4 = 12,288 clock cycles to send a new
-        // frame.
+        // column, starting with column 0 up to 31.
+        //
+        // The FPGA expects the color channels of each pixel to be 4 bits,
+        // but this means pixels don't line up on byte boundaries. The Pi's
+        // SPI hardware sends bytes in MSB order, but this means that if we
+        // a pixel crosses a byte boundary it will not be contiguous on
+        // the SPI bus. For this reason we send pixels in LSB order.
+        // This requires some nastyness.
 
         size_t x, y;
         uint8_t r0, g0, b0, r1, g1, b1;
         uint8_t byte1, byte2, byte3;
-        for (y = 0; y < frame::HEIGHT; ++y) {
-            for (x = 0; x < frame::WIDTH; x += 2) {
-                r0 = frame_.at(x, y).red() / 16;
-                g0 = frame_.at(x, y).green() / 16;
-                b0 = frame_.at(x, y).blue() / 16;
-                r1 = frame_.at(x + 1, y).red() / 16;
-                g1 = frame_.at(x + 1, y).green() / 16;
-                b1 = frame_.at(x + 1, y).blue() / 16;
-                byte1 = reverse(uint8_t(g0 << 4 | r0));
-                byte2 = reverse(uint8_t(r1 << 4 | b0));
-                byte3 = reverse(uint8_t(b1 << 4 | g1));
+        for (y = 0; y < HEIGHT; ++y) {
+            for (x = 0; x < WIDTH; x += 2) {
+                r0 = at(x, y).red() / 16;
+                g0 = at(x, y).green() / 16;
+                b0 = at(x, y).blue() / 16;
+                r1 = at(x + 1, y).red() / 16;
+                g1 = at(x + 1, y).green() / 16;
+                b1 = at(x + 1, y).blue() / 16;
+                byte1 = bit_reverse(uint8_t(g0 << 4 | r0));
+                byte2 = bit_reverse(uint8_t(r1 << 4 | b0));
+                byte3 = bit_reverse(uint8_t(b1 << 4 | g1));
                 // print statements to check that the above conversions
                 // are working properly
                 // printf("red0 %02x green0 %02X\n", r0, g0);
@@ -167,38 +113,90 @@ void frame_controller::write_frame() const
         }
 }
 
-
-//http://stackoverflow.com/questions/2602823/in-c-c-whats-the-simplest-way-to
-// -reverse-the-order-of-bits-in-a-byte
-uint8_t frame_controller::reverse(uint8_t byte) const
+microseconds frame_generator::get_frame_interval() const
 {
-   byte = (byte & 0xF0) >> 4 | (byte & 0x0F) << 4;
-   byte = (byte & 0xCC) >> 2 | (byte & 0x33) << 2;
-   byte = (byte & 0xAA) >> 1 | (byte & 0x55) << 1;
-   return byte;
+        return microseconds(1000*1000/get_frame_rate());
+}
+
+void frame_generator::play_song(const string& fname)
+{
+        wav_reader song(fname);
+        clock_t::time_point start, next_start;
+        size_t frame_count = 0;
+        microseconds offset, interval = get_frame_interval();
+        pid_t pid;
+        frame f;
+
+        // make the first frame before we start playing the song because
+        // it's comutationally intensive
+        if (!make_next_frame(song, microseconds(0), f))
+                throw runtime_error("failed to generate first frame");
+        
+        pid = fork();
+        if (pid < 0)
+                throw runtime_error("fork failed");
+        else if (pid == 0) {
+                // configure the pi to play audio through the audio jack
+                system("amixer cset numid=3 1");
+                system(("aplay " + fname).c_str());
+                exit(0);
+        } else {
+                start = clock_t::now();
+                for (;;) {
+                        f.write();
+                        next_start = start + ++frame_count*interval;
+                        offset = duration_cast<microseconds>(next_start - start);
+                        if (!make_next_frame(song, offset, f))
+                                break;
+                        this_thread::sleep_until(next_start);
+                }
+        }
+
+        waitpid(pid, NULL, WEXITED);
 }
 
 scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate, float cutoff)
-        : frame_rate_(frame_rate), last_frame_(), cutoff_(cutoff)
+        : frame_rate_(frame_rate), cutoff_(cutoff)
+{}
+
+// get the next power of 2 above v, unless v is a power of 2, in which case
+// return v. If v is zero, we return 0 because even though that's mathematically
+// wrong it's convenient.
+//
+// taken from here:
+// http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2Float
+static size_t next_power_of2_or_zero(size_t v)
 {
-        // zero the frame
-        last_frame_.fill(pixel());
+        size_t t;
+        float f;
+
+        if (v > 1) {
+                f = (float)v;
+                t = 1U << ((*(unsigned int *)&f >> 23) - 0x7f);
+                return t << (t < v);
+        } else
+                return v;
 }
 
-bool scrolling_fft_generator::make_next_frame(frame& frame,
-                                              vector<float>& sample)
+bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
+                                              std::chrono::microseconds start,
+                                              frame& frame)
 {
         size_t x, y;
-        unsigned order = 8*sizeof(size_t) - (__builtin_clzl(frame.size()) + 1);
-        vector<complex<float>> c_sample(1 << order);
         array<pixel, frame::HEIGHT> new_col;
+        vector<float> sample = song.get_range(start,
+                                              start + get_frame_interval());
+        size_t csize = next_power_of2_or_zero(sample.size());
+        vector<complex<float>> c_sample;
 
-        // copy to complex array and take the fft
-        copy(sample.begin(), sample.end(), c_sample.begin());
+        // copy the real sample to a complex array and 0-pad it to
+        // a power of 2 size
+        copy(sample.begin(), sample.end(), back_inserter(c_sample));
+        fill_n(back_inserter(c_sample), csize - c_sample.size(), 0);
         if (fft(c_sample))
                 return false;
 
-        new_col = create_next_column(c_sample);
+        new_col = make_next_column(c_sample);
 
         for (y = 0; y < frame::HEIGHT; ++y) {
                 for (x = frame::WIDTH; x-- > 1;)
@@ -210,8 +208,7 @@ bool scrolling_fft_generator::make_next_frame(frame& frame,
 }
 
 array<pixel, frame::HEIGHT>
-scrolling_fft_generator::create_next_column(
-        vector<complex<float>>& spectrum)
+scrolling_fft_generator::make_next_column(vector<complex<float>>& spectrum)
 {
         array<pixel, frame::HEIGHT> binned;
         complex<float> max, sum;
@@ -264,22 +261,28 @@ unsigned scrolling_fft_generator::get_frame_rate() const
         return frame_rate_;
 }
 
-bool trivial_frame_generator::make_next_frame(frame& frame,
-                                              vector<float>& sample)
+trivial_frame_generator::trivial_frame_generator(pixel p)
+        : p_(p)
+{}
+
+bool trivial_frame_generator::make_next_frame(const wav_reader& song,
+                                              std::chrono::microseconds start,
+                                              frame& frame)
 {
-        (void)sample;
+        (void)song;
+        (void)start;
 
-        // make an all red frame for testing
-        for_each(frame.begin(), frame.end(), [](pixel& pix) {
-                pix = pixel(255, 0, 0);
-        });
+        // make an frame of all the same pixel, just for testing
+        fill(frame.begin(), frame.end(), p_);
 
+        p_ = pixel(p_.green(), p_.blue(), p_.red());
+        
         return true;
 }
 
 unsigned trivial_frame_generator::get_frame_rate() const
 {
         // arbitrary
-        return 10;
+        return 30;
 }
 

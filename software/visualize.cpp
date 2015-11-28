@@ -27,20 +27,19 @@ int main (int argc, char** argv)
     }
 
     pioInit();
+    pTimerInit();
     spiInit(244000, 0);
 
+    pinMode(RESET_PIN, OUTPUT);
     digitalWrite(RESET_PIN, 1);
-    sleepMicros(1);
     digitalWrite(RESET_PIN, 0);
 
     string filename = argv[1];
     size_t frame_rate = 16;
     float cutoff = 0.01;
-    //scrolling_fft_generator* gen = new scrolling_fft_generator(frame_rate, cutoff);
-    trivial_frame_generator gen;
-    frame_controller controller = frame_controller(&gen);
-    // controller.write_frame();
-    controller.play_song(filename);
+//    scrolling_fft_generator gen = scrolling_fft_generator(frame_rate, cutoff);
+    trivial_frame_generator gen(pixel(0, 0, 255));
+    gen.play_song(filename);
 
     return 0;
 }

@@ -62,6 +62,8 @@ std::vector<float> wav_reader::get_range(std::chrono::microseconds start,
     unsigned start_index = unsigned(samples_per_micros * start.count());
     unsigned range_length = unsigned(samples_per_micros * duration.count());
     for (unsigned i = 0; i < range_length; i++) {
+            if (start_index + i >= data_chunk.ck_size)
+                    return samples_in_range;
         samples_in_range.push_back(samples[start_index + i]);
     }
     return samples_in_range;
