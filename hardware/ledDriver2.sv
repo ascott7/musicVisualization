@@ -40,7 +40,7 @@ module ledDriver2
     logic [3*CDEPTH-1:0] rpix, wpix;
     logic [9:0] raddr, waddr;
 
-    assign oe = 1'b1;
+    assign oe = 1'b0;
 
     frame_reader fr(clk, reset, sck, sdi, cdone, raddr, rpix, rdone);
     frame_writer fw(clk, reset, we, wpix, waddr, fstart, fend,
