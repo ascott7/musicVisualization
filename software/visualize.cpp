@@ -49,7 +49,7 @@ int main (int argc, char** argv)
     digitalWrite(RESET_PIN, 0);
 
     size_t frame_rate = 16;
-    float cutoff = 0.01;
+    float cutoff = 0.001;
     scrolling_fft_generator fft_gen(frame_rate, cutoff);
 
     lambda_generator test_gen(10, [&](const wav_reader& song,
@@ -58,17 +58,24 @@ int main (int argc, char** argv)
     {
             (void)song;
             (void)start;
-            for (size_t col = 0; col < 32; ++col) {
-                    frame.at(col, 10) = pixel(0, 0, 255);
-                    frame.at(col, 0) = pixel(0, 0, 255);
+            for (size_t row = 0; row < 32; ++row) {
+                    for (size_t col = 0; col < 32; ++col) {
+                            pixel p;
+                            if (col < 6)
+                                    p = pixel(255,0,0);
+                            else if (col < 11)
+                                    p = pixel(255,255,0);
+                            else if (col < 16)
+                                    p = pixel(0,255,0);
+                            else if (col < 21)
+                                    p = pixel(0,255,255);
+                            else if (col < 26)
+                                    p = pixel(0,0,255);
+                            else
+                                    p = pixel(255,0,255);
+                            frame.at(col, row) = p;
+                    }
             }
-
-            frame.at(0, 10) = pixel(255, 0, 0);
-            frame.at(1, 10) = pixel(0, 255, 0);
-            frame.at(31, 10) = pixel(255, 0, 0);
-            frame.at(0, 0) = pixel(255, 0, 0);
-            frame.at(1, 0) = pixel(0, 255, 0);
-            frame.at(31, 0) = pixel(255, 0, 0);
             return true;
     });
 
