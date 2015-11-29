@@ -15,6 +15,8 @@
  */
 
 #include "wav_reader.hpp"
+
+#include <cstring>
 #include <iostream>
 #include <fstream>
 using namespace std;
