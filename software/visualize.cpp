@@ -23,10 +23,21 @@
 using namespace std;
 int main (int argc, char** argv) 
 {
-    if (argc != 2) {
-        cout << "Incorrect parameters. Format is ./visualize filename.wav"
+    if (argc != 3 && argc != 2) {
+        cout << "usage: ./visualize filename.wav [type (fft||test)]"
              << endl;
         return 1;
+    }
+
+    string filename = argv[1];
+    string type = "fft";
+
+    if (argc == 3) {
+            type = argv[2];
+            if (type != "fft" && type != "test") {
+                    cout << "type argument must be 'fft' or 'test'" << endl;
+                    return 1;
+            }
     }
 
     pioInit();
@@ -37,12 +48,11 @@ int main (int argc, char** argv)
     digitalWrite(RESET_PIN, 1);
     digitalWrite(RESET_PIN, 0);
 
-    string filename = argv[1];
     size_t frame_rate = 16;
-    float cutoff = 0.1;
-//    scrolling_fft_generator gen = scrolling_fft_generator(frame_rate, cutoff);
+    float cutoff = 0.01;
+    scrolling_fft_generator fft_gen(frame_rate, cutoff);
 
-    lambda_generator gen(10, [&](const wav_reader& song,
+    lambda_generator test_gen(10, [&](const wav_reader& song,
                                  chrono::microseconds start,
                                  frame& frame) -> bool
     {
@@ -50,15 +60,22 @@ int main (int argc, char** argv)
             (void)start;
             for (size_t col = 0; col < 32; ++col) {
                     frame.at(col, 10) = pixel(0, 0, 255);
+                    frame.at(col, 0) = pixel(0, 0, 255);
             }
 
             frame.at(0, 10) = pixel(255, 0, 0);
             frame.at(1, 10) = pixel(0, 255, 0);
             frame.at(31, 10) = pixel(255, 0, 0);
+            frame.at(0, 0) = pixel(255, 0, 0);
+            frame.at(1, 0) = pixel(0, 255, 0);
+            frame.at(31, 0) = pixel(255, 0, 0);
             return true;
     });
 
-    gen.play_song(filename);
+    if (type == "fft")
+            fft_gen.play_song(filename);
+    else
+            test_gen.play_song(filename);
 
     return 0;
 }
