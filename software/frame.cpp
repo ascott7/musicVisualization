@@ -260,29 +260,3 @@ unsigned scrolling_fft_generator::get_frame_rate() const
 {
         return frame_rate_;
 }
-
-trivial_frame_generator::trivial_frame_generator(pixel p)
-        : p_(p)
-{}
-
-bool trivial_frame_generator::make_next_frame(const wav_reader& song,
-                                              std::chrono::microseconds start,
-                                              frame& frame)
-{
-        (void)song;
-        (void)start;
-
-        // make an frame of all the same pixel, just for testing
-        fill(frame.begin(), frame.end(), p_);
-
-        p_ = pixel(p_.green(), p_.blue(), p_.red());
-        
-        return true;
-}
-
-unsigned trivial_frame_generator::get_frame_rate() const
-{
-        // arbitrary
-        return 30;
-}
-

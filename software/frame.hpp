@@ -14,6 +14,7 @@
 #include <chrono>
 #include <complex>
 #include <cstdint>
+#include <functional>
 #include <string>
 #include <tuple>
 
@@ -103,18 +104,31 @@ private:
         float cutoff_;
 };
 
-// trivial frame generator. Spits out frames that are all red.
-class trivial_frame_generator : public frame_generator {
+// lambda generator. holds a function that is called in place of
+// "make_next_frame". Makes for easy prototyping
+class lambda_generator : public frame_generator {
+        using func_t = std::function<bool(const wav_reader&,
+                                          std::chrono::microseconds,
+                                          frame&)>;
+        func_t f_;
+        const unsigned frame_rate_;
 public:
-        trivial_frame_generator(pixel p);
-        ~trivial_frame_generator() = default;
+        lambda_generator(unsigned frame_rate, func_t f)
+                : f_(f), frame_rate_(frame_rate)
+        {}
+
+        ~lambda_generator() = default;
 
 protected:
         bool make_next_frame(const wav_reader& song,
                              std::chrono::microseconds start,
-                             frame& frame);
-        unsigned get_frame_rate() const;
+                             frame& frame)
+        {
+                return f_(song, start, frame);
+        }
 
-private:
-        pixel p_;
+        unsigned get_frame_rate() const
+        {
+                return frame_rate_;
+        }
 };

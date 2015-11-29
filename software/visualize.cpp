@@ -14,6 +14,8 @@
 #include "wav_reader.hpp"
 #include "frame.hpp"
 #include "piHelpers.h"
+
+#include <algorithm>
 #include <iostream>
 
 #define RESET_PIN 20
@@ -22,7 +24,8 @@ using namespace std;
 int main (int argc, char** argv) 
 {
     if (argc != 2) {
-        cout << "Incorrect parameters. Format is ./visualize filename.wav" << endl;
+        cout << "Incorrect parameters. Format is ./visualize filename.wav"
+             << endl;
         return 1;
     }
 
@@ -36,9 +39,25 @@ int main (int argc, char** argv)
 
     string filename = argv[1];
     size_t frame_rate = 16;
-    float cutoff = 0.01;
+    float cutoff = 0.1;
 //    scrolling_fft_generator gen = scrolling_fft_generator(frame_rate, cutoff);
-    trivial_frame_generator gen(pixel(0, 0, 255));
+
+    lambda_generator gen(10, [&](const wav_reader& song,
+                                 chrono::microseconds start,
+                                 frame& frame) -> bool
+    {
+            (void)song;
+            (void)start;
+            for (size_t col = 0; col < 32; ++col) {
+                    frame.at(col, 10) = pixel(0, 0, 255);
+            }
+
+            frame.at(0, 10) = pixel(255, 0, 0);
+            frame.at(1, 10) = pixel(0, 255, 0);
+            frame.at(31, 10) = pixel(255, 0, 0);
+            return true;
+    });
+
     gen.play_song(filename);
 
     return 0;
