@@ -112,23 +112,14 @@ class lambda_generator : public frame_generator {
                                           frame&)>;
         func_t f_;
         const unsigned frame_rate_;
-public:
-        lambda_generator(unsigned frame_rate, func_t f)
-                : f_(f), frame_rate_(frame_rate)
-        {}
 
+public:
+        lambda_generator(unsigned frame_rate, func_t f);
         ~lambda_generator() = default;
 
 protected:
         bool make_next_frame(const wav_reader& song,
                              std::chrono::microseconds start,
-                             frame& frame)
-        {
-                return f_(song, start, frame);
-        }
-
-        unsigned get_frame_rate() const
-        {
-                return frame_rate_;
-        }
+                             frame& frame);
+        unsigned get_frame_rate() const;
 };

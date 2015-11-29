@@ -260,3 +260,19 @@ unsigned scrolling_fft_generator::get_frame_rate() const
 {
         return frame_rate_;
 }
+
+lambda_generator::lambda_generator(unsigned frame_rate, func_t f)
+        : f_(f), frame_rate_(frame_rate)
+{}
+
+bool lambda_generator::make_next_frame(const wav_reader& song,
+                                       std::chrono::microseconds start,
+                                       frame& frame)
+{
+        return f_(song, start, frame);
+}
+
+unsigned lambda_generator::get_frame_rate() const
+{
+        return frame_rate_;
+}
