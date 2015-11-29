@@ -40,11 +40,9 @@ module ledDriver2
     logic [3*CDEPTH-1:0] rpix, wpix;
     logic [9:0] raddr, waddr;
 
-    assign oe = 1'b0;
-
     frame_reader fr(clk, reset, sck, sdi, cdone, raddr, rpix, rdone);
     frame_writer fw(clk, reset, we, wpix, waddr, fstart, fend,
-                    rgb1, rgb2, rsel, mclk, latch);
+                    rgb1, rgb2, rsel, mclk, latch, oe);
     controller ctl(clk, reset, rdone, fend, rpix, wpix, 
                    raddr, waddr, fstart, we, cdone);
 
@@ -190,7 +188,8 @@ endmodule
 module frame_writer
                   #(parameter CDEPTH=4,
                     parameter FRAME_ORDER=10,
-                    parameter MCLK_DIV_BITS=7)
+                    parameter MCLK_DIV_BITS=3,
+                    parameter LATCH_BITS=5)
                    (input  logic clk,
                     input  logic reset,
                     input  logic we,
@@ -200,11 +199,12 @@ module frame_writer
                     output logic fend,
                     output logic [2:0] lo_rgb,
                     output logic [2:0] hi_rgb,
-                    output logic [3:0] row,
+                    output logic [3:0] row_out,
                     output logic mclk,
-                    output logic latch);
+                    output logic latch,
+                    output logic oe);
 
-    typedef enum logic [2:0] {WAIT, WRITE_ROW, LATCH, ROW_END, DONE} state_t;
+    typedef enum logic [2:0] {WAIT, WRITE_ROW, LATCH, DONE} state_t;
 
     state_t state, next_state;
     logic [4:0] col;
@@ -212,7 +212,9 @@ module frame_writer
     logic [MCLK_DIV_BITS-1:0] mclk_div;
     logic [FRAME_ORDER-2:0] addr;
     logic lo_we, hi_we;
-    logic [5:0] latch_count;
+    logic [LATCH_BITS-1:0] latch_count;
+    logic [3:0] row;
+    logic [CDEPTH-1:0] pwm_cnt;
 
     /* 
      * we use seperate rams for the top and bottom halves of the frame so we
@@ -232,6 +234,8 @@ module frame_writer
             mclk_div <= '0;
             state <= WAIT;
             latch_count <= '0;
+            row_out <= '0;
+            pwm_cnt <= '0;
         end else begin
             state <= next_state;
 
@@ -242,10 +246,16 @@ module frame_writer
                 if (mclk_div == '1)
                     col <= col + 1'b1;
 
-            end else if (state == LATCH)
+            end else if (state == LATCH) begin
                 latch_count <= latch_count + 1'b1;
-            else if (state == ROW_END)
-                row <= row + 1'b1;
+                if (latch_count == 1 << (LATCH_BITS-2)) begin
+                    pwm_cnt <= pwm_cnt + 1'b1;
+                    if (pwm_cnt == '1) begin
+                        row_out <= row;
+                        row <= row + 1'b1;
+                    end
+                end
+            end
         end
     end
 
@@ -253,24 +263,23 @@ module frame_writer
         case (state)
         WAIT: next_state = fstart ? WRITE_ROW : WAIT;
         WRITE_ROW: next_state = col == '1 && mclk_div == '1 ? LATCH : WRITE_ROW;
-        LATCH: next_state = latch_count == '1 ? ROW_END : LATCH;
-        ROW_END: next_state = row == '1 ? DONE : WRITE_ROW;
+        LATCH: next_state = latch_count == '1 ? row == 0 && pwm_cnt == 0 
+                              ? DONE : WRITE_ROW : LATCH;
         DONE: next_state = WAIT;
+        default: next_state = WAIT;
         endcase
 
+    assign fend = state == DONE;
     assign mclk = ~mclk_div[MCLK_DIV_BITS-1];
     assign latch = state == LATCH;
-    assign fend = state == DONE;
+    assign oe = state == LATCH;
 
-    /*
-     * XXX: still need to implement PWM
-     */
-    assign lo_rgb[0] = lo_pix[CDEPTH-1:0] > '0;
-    assign lo_rgb[1] = lo_pix[2*CDEPTH-1:CDEPTH] > '0;
-    assign lo_rgb[2] = lo_pix[3*CDEPTH-1:2*CDEPTH] > '0;
-    assign hi_rgb[0] = hi_pix[CDEPTH-1:0] > '0;
-    assign hi_rgb[1] = hi_pix[2*CDEPTH-1:CDEPTH] > '0;
-    assign hi_rgb[2] = hi_pix[3*CDEPTH-1:2*CDEPTH] > '0;
+    assign lo_rgb[0] = lo_pix[CDEPTH-1:0] > pwm_cnt;
+    assign lo_rgb[1] = lo_pix[2*CDEPTH-1:CDEPTH] > pwm_cnt;
+    assign lo_rgb[2] = lo_pix[3*CDEPTH-1:2*CDEPTH] > pwm_cnt;
+    assign hi_rgb[0] = hi_pix[CDEPTH-1:0] > pwm_cnt;
+    assign hi_rgb[1] = hi_pix[2*CDEPTH-1:CDEPTH] > pwm_cnt;
+    assign hi_rgb[2] = hi_pix[3*CDEPTH-1:2*CDEPTH] > pwm_cnt;
 endmodule
 
 /**
@@ -305,7 +314,7 @@ module controller
                  output logic we,
                  output logic cdone);
 
-    typedef enum logic [2:0] {RESET, WRITE, NEW_FRAME, COPY, WAIT} state_t;
+    typedef enum logic [2:0] {RESET, WRITE, NEW_FRAME, COPY} state_t;
 
     state_t state, next_state;
     logic saw_done;
@@ -321,6 +330,8 @@ module controller
 
             if (state == COPY || state == RESET)
                 raddr <= raddr + 1'b1;
+            else if (state == NEW_FRAME)
+                raddr <= '0;
 
             if (state == COPY)
                 saw_done <= '0;
@@ -336,8 +347,7 @@ module controller
         WRITE: next_state = fend ? saw_done ? COPY : NEW_FRAME : WRITE;
         NEW_FRAME: next_state = WRITE;
         COPY: next_state = cdone ? NEW_FRAME : COPY;
-        WAIT: next_state = saw_done ? COPY : WAIT;
-        RESET: next_state = cdone ? WAIT : RESET;
+        RESET: next_state = cdone ? NEW_FRAME : RESET;
         default: next_state = RESET;
         endcase
 
@@ -379,12 +389,17 @@ module ram
 endmodule
 
 module testbench();
-    logic [11:0] frame[0:32*32-1];
+    logic [11:0] one_frame[0:32*32-1];
+    logic [11:0] zero_frame[0:32*32-1];
+    logic [11:0] patern_frame[0:32*32-1];
+    logic [11:0] distinct_rows_frame[0:32*32-1];
     logic [9:0] addr;
     logic [3:0] bits;
     logic [2:0] rgb1, rgb2;
     logic [3:0] rsel;
-    logic clk, reset, sck, sck_out, finished_send, sdi, mclk, latch, oe, did_reset;
+    logic clk, reset, sck, sck_out, finished_send, sdi, mclk, latch, 
+          oe, did_reset, frame_sel;
+    logic [31:0] cycles;
 
     ledDriver2 dut(clk, reset, sck_out, sdi, rgb1, rgb2, rsel, mclk, latch, oe);
 
@@ -394,8 +409,13 @@ module testbench();
         reset <= '1;
         did_reset <= '0;
         finished_send <= '0;
+        cycles <= '0;
+        frame_sel <= '0;
 
-        $readmemh("frame.txt", frame);
+        $readmemh("patern_frame.txt", patern_frame);
+        $readmemh("one_frame.txt", one_frame);
+        $readmemh("zero_frame.txt", zero_frame);
+        $readmemh("distinct_rows.txt", distinct_rows_frame);
     end
 
     initial forever begin
@@ -417,13 +437,26 @@ module testbench();
 
     always_ff @(posedge sck) begin
         if (~reset && ~finished_send) begin
-            sdi <= frame[addr][bits];
+            sdi <= frame_sel ? patern_frame[addr][bits] 
+                             : one_frame[addr][bits];
             bits <= bits == 11 ? '0 : bits + 1;
             if (bits == 11)
                 addr <= addr + 1;
         end
 
-        if (addr == '1 && bits == 11)
+        cycles <= cycles + 1;
+
+        /* 
+         * while the frame_writer is refreshing the display with the first
+         * frame, start writing another to SPI. The 19000 constatnt was
+         * determined from model sim/math. Change to ??? to start writing the
+         * new frame when the frame_writer is in the middle of its second
+         * refersh
+         */
+        if (cycles == 19000) begin
+            finished_send <= '0;
+            frame_sel <= 1;
+        end else if (addr == '1 && bits == 11)
             finished_send <= '1;
     end
 
