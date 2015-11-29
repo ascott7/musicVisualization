@@ -15,15 +15,22 @@
  */
 
 #include "wav_reader.hpp"
+
+#include <cstring>
 #include <iostream>
 #include <fstream>
+using namespace std;
 
-wav_reader::wav_reader(std::string filename)
+#define CHUNK_SIZE_LENGTH 4
+#define CHUNK_ID_LENGTH 4
+
+wav_reader::wav_reader(string filename)
 {
     char* file_data;
-    unsigned file_size;
+    uint32_t file_size;
+    size_t file_offset = 0;
 
-    std::ifstream file (filename, std::ios::binary | std::ios::in);
+    ifstream file (filename, ios::binary | ios::in);
     if (file.is_open()) {
         // read in all of the file data
         file_size = read_header_chunk(file);
@@ -31,117 +38,108 @@ wav_reader::wav_reader(std::string filename)
         file.read(file_data, file_size);
         file.close();
 
-        // get formatting info from the file then the data samples
-        read_format_chunk(file_data);
-        read_data_chunk(file_data);
-
-        // convert data samples to floats
-        samples = new float[data_chunk.ck_size];
-        for (unsigned i = 0; i < data_chunk.ck_size; i++) {
-            samples[i] = float((unsigned char)(file_data[i + 36]));
+        // keep reading chunks until we get to the end of the file
+        while (file_offset < file_size) {
+            read_general_chunk(file_data, file_offset);
         }
-        //printf("%x\n", (unsigned char)(0x00 | file_data[36]));
+
         delete[] file_data;
     }
     else {
-        std::cerr << "Unable to open file" << std::endl;
+        cerr << "Unable to open file" << endl;
         exit(5);
     }
 }
 
 wav_reader::~wav_reader()
 {
-    delete[] samples;
+    if (num_samples_ > 0) {
+        delete[] samples_;
+    }
 }
 
-std::vector<float> wav_reader::get_range(std::chrono::microseconds start, 
-            std::chrono::microseconds duration) const
+vector<float> wav_reader::get_range(chrono::microseconds start, 
+            chrono::microseconds duration) const
 {
-    std::vector<float> samples_in_range;
+    vector<float> samples_in_range;
     float samples_per_micros = float(fmt_chunk.dw_samples_per_sec) / 1000000;
-    unsigned start_index = unsigned(samples_per_micros * start.count());
-    unsigned range_length = unsigned(samples_per_micros * duration.count());
-    for (unsigned i = 0; i < range_length; i++) {
-            if (start_index + i >= data_chunk.ck_size)
+    uint32_t start_index = uint32_t(samples_per_micros * start.count());
+    uint32_t range_length = uint32_t(samples_per_micros * duration.count());
+    for (uint32_t i = 0; i < range_length; i++) {
+            if (start_index + i >= num_samples_)
                     return samples_in_range;
-        samples_in_range.push_back(samples[start_index + i]);
+        samples_in_range.push_back(float(samples_[start_index + i]));
     }
+    // this print statement appears to work (it prints out what we expect)
+    // but it also causes a memory leak for some reason
+    // cout << samples_in_range.at(0) << endl;
     return samples_in_range;
 }
 
-unsigned wav_reader::read_header_chunk(std::ifstream& file)
+size_t wav_reader::read_header_chunk(ifstream& file)
 {
     char* header_chunk;
-    unsigned size;
+    uint32_t size;
 
-    header_chunk = new char [8];
-    file.read(header_chunk, 8);
-    for (unsigned i = 0; i < 4; i++) {
+    header_chunk = new char [12];
+    file.read(header_chunk, 12);
+    for (uint32_t i = 0; i < 4; i++) {
         riff_header.ck_id[i] = header_chunk[i];
     }
+    riff_header.ck_id[4] = '\0';
     // check for RIFF header
-    // if (strcmp(riff_header.ck_id, "RIFF") != 0) {
-    //     std::cout << riff_header.ck_id << std::endl;
-    //     std::cerr << "Invalid file, not RIFF type" << std::endl;
-    //     exit(1);
-    // }
+    if (strcmp(riff_header.ck_id, "RIFF") != 0) {
+        cout << riff_header.ck_id << endl;
+        cerr << "Invalid file, not RIFF type" << endl;
+        exit(1);
+    }
     // get file size
-    size = *(unsigned *) (header_chunk + sizeof(char) * 4);
-    delete[] header_chunk;
-    return size;
-}
-
-void wav_reader::read_format_chunk(char* file_data)
-{
-    for (unsigned i = 0; i < 4; i++) {
-        fmt_chunk.wav_id[i] = file_data[i];
+    size = *(uint32_t *) (header_chunk + sizeof(char) * 4);
+    riff_header.ck_size = size;
+    for (size_t i = 8; i < 12; i++) {
+        riff_header.wav_id[i - 8] = header_chunk[i];
     }
+    riff_header.wav_id[4] = '\0';
     // check for WAVE header
-    // if (strcmp(fmt_chunk.wav_id, "WAVE")) {
-    //     std::cerr << "File missing WAVE identifier" << std::endl;
-    //     exit(2);
-    // }
-    for (unsigned i = 4; i < 8; i++) {
-        fmt_chunk.ck_id[i - 4] = file_data[i];
+    if (strcmp(riff_header.wav_id, "WAVE")) {
+        cerr << "File missing WAVE identifier" << endl;
+        exit(2);
     }
-    // check for fmt header
-    // if (strcmp(fmt_chunk.ck_id, "fmt ")) {
-    //     std::cerr << "File missing fmt chunk" << std::endl;
-    //     exit(3);
-    // }
-    // get format data from the file
-    fmt_chunk.ck_size = *(unsigned *) (file_data + sizeof(char) * 8);
-    fmt_chunk.w_format_tag = (0x00 | file_data[13]) << 8 | file_data[12];
-    fmt_chunk.w_channels = *(unsigned short*) (file_data + sizeof(char) * 14);
-    fmt_chunk.dw_samples_per_sec = *(unsigned *) (file_data + sizeof(char) * 16);
-    fmt_chunk.dw_avg_bytes_per_sec = *(unsigned *) (file_data + sizeof(char) * 20);
-    fmt_chunk.w_block_align = *(unsigned short *) (file_data + sizeof(char) * 24);
-    fmt_chunk.w_bits_per_sample = *(unsigned short *) (file_data + sizeof(char) * 26);
-    
-    /*
-    Uncomment to print format information
-    cout << "Format chunk size: " << fmt_chunk.ck_size << std::endl;
-    printf("Format code: %04x\n", fmt_chunk.w_format_tag);
-    printf("Number of channels: %d\n", fmt_chunk.w_channels);
-    printf("Samples per second: %d\n", fmt_chunk.dw_samples_per_sec);
-    printf("Bytes per second: %d\n", fmt_chunk.dw_avg_bytes_per_sec);
-    printf("Data block size: %d\n", fmt_chunk.w_block_align);
-    printf("Bits per sample: %d\n", fmt_chunk.w_bits_per_sample);
-    */
+    delete[] header_chunk;
+    return size - 4;        // accounts for the 'WAVE' characters
 }
 
-void wav_reader::read_data_chunk(char* file_data)
+void wav_reader::read_general_chunk(char* file_data, size_t& file_offset)
 {
-    for (unsigned i = 28; i < 32; i++) {
-        data_chunk.ck_id[i - 28] = file_data[i];
+    char id [5];
+    // get the id for the current chunk we are looking at
+    for (size_t i = file_offset; i < file_offset + CHUNK_ID_LENGTH; i++) {
+        id[i - file_offset] = file_data[i];
     }
-    // check for data header
-    // if (strcmp(data_chunk.ck_id, "data")) {
-    //     std::cerr << "File missing data chunk" << std::endl;
-    //     exit(4);
-    // }
-    data_chunk.ck_size = *(unsigned *) (file_data + sizeof(char) * 32);
-    // printf("Data size: %d\n", data_chunk.ck_size);
-    // printf("%d %d\n", file_size - 36, data_chunk.ck_size);
+    id[4] = '\0';
+    size_t size = *(uint32_t *) (file_data + sizeof(char) * (file_offset + 4));
+
+    cout << id << endl;
+
+    // if we are at the format chunk, get the formatting information
+    if (strcmp(id, "fmt ") == 0) {
+        fmt_chunk.ck_size = *(size_t *) (file_data + sizeof(char) * 4);
+        fmt_chunk.w_format_tag = (0x00 | file_data[9]) << 8 | file_data[8];
+        fmt_chunk.w_channels = *(uint16_t*) (file_data + sizeof(char) * 10);
+        fmt_chunk.dw_samples_per_sec = *(uint32_t *) (file_data + sizeof(char) * 12);
+        fmt_chunk.dw_avg_bytes_per_sec = *(uint32_t *) (file_data + sizeof(char) * 16);
+        fmt_chunk.w_block_align = *(uint16_t *) (file_data + sizeof(char) * 20);
+        fmt_chunk.w_bits_per_sample = *(uint16_t *) (file_data + sizeof(char) * 22);
+    }
+    // if we are at the data chunk, get the data samples
+    if (strcmp(id, "data") == 0) {
+        num_samples_ = size;
+        samples_ = new uint8_t[size];
+        for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_; i++) {
+            samples_[i - (file_offset + 8)] = uint8_t(file_data[i]);
+        }
+    }
+
+    file_offset = file_offset + size + CHUNK_ID_LENGTH + CHUNK_SIZE_LENGTH;
 }
 

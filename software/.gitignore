@@ -1,5 +1,7 @@
 *.o
 fft_test
+fft_test2
+reset
 wav_reader_test
 *.dSYM
 visualize

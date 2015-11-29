@@ -33,9 +33,13 @@ class wav_reader {
             std::chrono::microseconds duration) const;
     
     private:
+        struct riff_header {
+            char ck_id[5];                      // should be "RIFF"
+            unsigned ck_size;                   // size of the whole file
+            char wav_id[5];                     // should be "WAVE"
+        } riff_header;
+
         struct fmt_chunk {
-            char wav_id[4];                     // should be "WAVE"
-            char ck_id[4];                      // should be "fmt "
             unsigned ck_size;                   // size of the rest of the file
             unsigned short w_format_tag;        // Format category
             unsigned short w_channels;          // Number of channels
@@ -44,16 +48,6 @@ class wav_reader {
             unsigned short w_block_align;       // Data block size
             unsigned short w_bits_per_sample;   // Number of bits per sample
         } fmt_chunk;
-
-        struct data_chunk {
-            char ck_id[4];                      // should be "data"
-            unsigned ck_size;                   // size of the sample data
-        } data_chunk;
-
-        struct riff_header {
-            char ck_id[4];                      // should be "RIFF"
-            unsigned ck_size;                   // size of the whole file
-        } riff_header;
 
         /**
         *   \brief Reads the first 8 bytes of the file, checking that the
@@ -66,27 +60,12 @@ class wav_reader {
         *   \returns The size of the file
         *
         */
-        unsigned read_header_chunk(std::ifstream& file);
+        size_t read_header_chunk(std::ifstream& file);
 
-        /**
-        *   \brief Reads the first 28 bytes past the first 8 bytes of the file
-        *       (aka the 8th to 36th bytes), grabbing the formatting data
-        *       located there and placing it in the fmt_chunk struct.
-        *
-        *   \param file_data A character array holding the file data
-        *
-        */
-        void read_format_chunk(char* file_data);
+        void read_general_chunk(char* file_data, size_t& file_offset);
 
-        /**
-        *   \brief Reads the actual samples from the file and places
-        *       them in the samples array
-        *   \param file_data A character array holding the file data
-        *
-        */
-        void read_data_chunk(char* file_data);
-
-        float* samples;     ///> the data samples themselves
+        uint8_t* samples_;         ///> the data samples themselves
+        size_t num_samples_;     ///> the number of samples
 };
 
 #endif // WAVREADER_HPP_INCLUDED
