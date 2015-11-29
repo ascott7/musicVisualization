@@ -71,6 +71,12 @@ const pixel& frame::at(size_t x, size_t y) const
         return array::at(x*WIDTH + y);
 }
 
+// gamma correct
+static uint8_t gc(uint8_t x)
+{
+        return 255*pow(double(x)/255, 2.5);
+}
+
 void frame::write() const
 {
         // For now the format for the spi communication will involve sending
@@ -89,12 +95,12 @@ void frame::write() const
         uint8_t byte1, byte2, byte3;
         for (y = 0; y < HEIGHT; ++y) {
             for (x = 0; x < WIDTH; x += 2) {
-                r0 = at(x, y).red() / 16;
-                g0 = at(x, y).green() / 16;
-                b0 = at(x, y).blue() / 16;
-                r1 = at(x + 1, y).red() / 16;
-                g1 = at(x + 1, y).green() / 16;
-                b1 = at(x + 1, y).blue() / 16;
+                r0 = gc(at(x, y).red()) / 16;
+                g0 = gc(at(x, y).green()) / 16;
+                b0 = gc(at(x, y).blue()) / 16;
+                r1 = gc(at(x + 1, y).red()) / 16;
+                g1 = gc(at(x + 1, y).green()) / 16;
+                b1 = gc(at(x + 1, y).blue()) / 16;
                 byte1 = bit_reverse(uint8_t(g0 << 4 | r0));
                 byte2 = bit_reverse(uint8_t(r1 << 4 | b0));
                 byte3 = bit_reverse(uint8_t(b1 << 4 | g1));

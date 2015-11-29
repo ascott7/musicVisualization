@@ -15,12 +15,24 @@
 #include "frame.hpp"
 #include "piHelpers.h"
 
+#define _USE_MATH_DEFINES
+
 #include <algorithm>
+#include <cmath>
 #include <iostream>
 
 #define RESET_PIN 20
 
 using namespace std;
+
+static pixel rainbow32(size_t x)
+{
+        return pixel(
+                127*(1 + cos(2*M_PI*x/32)),
+                127*(1 + cos(2*M_PI*x/32 - 2*M_PI/3)),
+                127*(1 + cos(2*M_PI*x/32 - 4*M_PI/3)));
+}
+
 int main (int argc, char** argv) 
 {
     if (argc != 3 && argc != 2) {
@@ -48,34 +60,32 @@ int main (int argc, char** argv)
     digitalWrite(RESET_PIN, 1);
     digitalWrite(RESET_PIN, 0);
 
-    size_t frame_rate = 16;
-    float cutoff = 0.001;
+    size_t frame_rate = 20;
+    float cutoff = 0.002;
     scrolling_fft_generator fft_gen(frame_rate, cutoff);
 
-    lambda_generator test_gen(10, [&](const wav_reader& song,
+    // at some point we should move cool shit to another file, but for
+    // now I'm just dumping it here. This makes a rainbow.
+    lambda_generator rainbow(10, [&](const wav_reader& song,
                                  chrono::microseconds start,
                                  frame& frame) -> bool
     {
             (void)song;
             (void)start;
-            for (size_t row = 0; row < 32; ++row) {
-                    for (size_t col = 0; col < 32; ++col) {
-                            pixel p;
-                            if (col < 6)
-                                    p = pixel(255,0,0);
-                            else if (col < 11)
-                                    p = pixel(255,255,0);
-                            else if (col < 16)
-                                    p = pixel(0,255,0);
-                            else if (col < 21)
-                                    p = pixel(0,255,255);
-                            else if (col < 26)
-                                    p = pixel(0,0,255);
-                            else
-                                    p = pixel(255,0,255);
-                            frame.at(col, row) = p;
-                    }
-            }
+            for (size_t row = 0; row < 32; ++row)
+                    for (size_t col = 0; col < 32; ++col)
+                            frame.at(col, row) = rainbow32(col);
+            return true;
+    });
+
+    lambda_generator test_gen(10, [&](const wav_reader& song,
+                                      chrono::microseconds start,
+                                      frame& frame) -> bool
+    {
+            (void)song;
+            (void)start;
+            for (size_t col = 0; col < 32; ++col)
+                    frame.at(col, 1) = pixel(255, 0, 0);
             return true;
     });
 
