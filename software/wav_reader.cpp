@@ -36,9 +36,6 @@ wav_reader::wav_reader(string filename)
         file.read(file_data, file_size);
         file.close();
 
-        // get formatting info from the file
-        //file_offset = read_format_chunk(file_data);
-
         // keep reading chunks until we get to the end of the file
         while (file_offset < file_size) {
             read_general_chunk(file_data, file_offset);
@@ -143,39 +140,4 @@ void wav_reader::read_general_chunk(char* file_data, size_t& file_offset)
 
     file_offset = file_offset + size + CHUNK_ID_LENGTH + CHUNK_SIZE_LENGTH;
 }
-
-size_t wav_reader::read_format_chunk(char* file_data)
-{
-    // for (size_t i = 0; i < 4; i++) {
-    //     fmt_chunk.ck_id[i] = file_data[i];
-    // }
-    // fmt_chunk.ck_id[4] = '\0';
-    // // check for fmt header
-    // if (strcmp(fmt_chunk.ck_id, "fmt ")) {
-    //     cerr << "File missing fmt chunk" << endl;
-    //     exit(3);
-    // }
-    // get format data from the file
-    fmt_chunk.ck_size = *(size_t *) (file_data + sizeof(char) * 4);
-    fmt_chunk.w_format_tag = (0x00 | file_data[9]) << 8 | file_data[8];
-    fmt_chunk.w_channels = *(uint16_t*) (file_data + sizeof(char) * 10);
-    fmt_chunk.dw_samples_per_sec = *(uint32_t *) (file_data + sizeof(char) * 12);
-    fmt_chunk.dw_avg_bytes_per_sec = *(uint32_t *) (file_data + sizeof(char) * 16);
-    fmt_chunk.w_block_align = *(uint16_t *) (file_data + sizeof(char) * 20);
-    fmt_chunk.w_bits_per_sample = *(uint16_t *) (file_data + sizeof(char) * 22);
-    
-    
-    //Uncomment to print format information
-    /*
-    cout << "Format chunk size: " << fmt_chunk.ck_size << endl;
-    printf("Format code: %04x\n", fmt_chunk.w_format_tag);
-    printf("Number of channels: %d\n", fmt_chunk.w_channels);
-    printf("Samples per second: %d\n", fmt_chunk.dw_samples_per_sec);
-    printf("Bytes per second: %d\n", fmt_chunk.dw_avg_bytes_per_sec);
-    printf("Data block size: %d\n", fmt_chunk.w_block_align);
-    printf("Bits per sample: %d\n", fmt_chunk.w_bits_per_sample);
-    */
-    return fmt_chunk.ck_size + CHUNK_ID_LENGTH + CHUNK_SIZE_LENGTH;
-}
-
 
