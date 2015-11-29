@@ -70,7 +70,9 @@ vector<float> wav_reader::get_range(chrono::microseconds start,
                     return samples_in_range;
         samples_in_range.push_back(float(samples_[start_index + i]));
     }
-    cout << samples_in_range.at(0) << endl;
+    // this print statement appears to work (it prints out what we expect)
+    // but it also causes a memory leak for some reason
+    // cout << samples_in_range.at(0) << endl;
     return samples_in_range;
 }
 
