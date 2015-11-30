@@ -13,24 +13,86 @@
 
 #include "wav_reader.hpp"
 #include "frame.hpp"
+#include "piHelpers.h"
+
+#define _USE_MATH_DEFINES
+
+#include <algorithm>
+#include <cmath>
 #include <iostream>
 
+#define RESET_PIN 20
 
 using namespace std;
+
+static pixel rainbow32(size_t x)
+{
+        return pixel(
+                127*(1 + cos(2*M_PI*x/32)),
+                127*(1 + cos(2*M_PI*x/32 - 2*M_PI/3)),
+                127*(1 + cos(2*M_PI*x/32 - 4*M_PI/3)));
+}
+
 int main (int argc, char** argv) 
 {
-    if (argc != 2) {
-        cout << "Incorrect parameters. Format is ./visualize filename.wav" << endl;
+    if (argc != 3 && argc != 2) {
+        cout << "usage: ./visualize filename.wav [type (fft||test)]"
+             << endl;
         return 1;
     }
+
     string filename = argv[1];
-    size_t frame_rate = 16;
-    float cutoff = 0.01;
-    scrolling_fft_generator* gen = new scrolling_fft_generator(frame_rate, cutoff);
-    //trivial_frame_generator gen;
-    frame_controller controller = frame_controller(gen);
-    // controller.write_frame();
-    controller.play_song(filename);
+    string type = "fft";
+
+    if (argc == 3) {
+            type = argv[2];
+            if (type != "fft" && type != "test") {
+                    cout << "type argument must be 'fft' or 'test'" << endl;
+                    return 1;
+            }
+    }
+
+    pioInit();
+    pTimerInit();
+    spiInit(244000, 0);
+
+    pinMode(RESET_PIN, OUTPUT);
+    digitalWrite(RESET_PIN, 1);
+    digitalWrite(RESET_PIN, 0);
+
+    size_t frame_rate = 20;
+    float cutoff = 0.002;
+    scrolling_fft_generator fft_gen(frame_rate, cutoff);
+
+    // at some point we should move cool shit to another file, but for
+    // now I'm just dumping it here. This makes a rainbow.
+    lambda_generator rainbow(10, [&](const wav_reader& song,
+                                 chrono::microseconds start,
+                                 frame& frame) -> bool
+    {
+            (void)song;
+            (void)start;
+            for (size_t row = 0; row < 32; ++row)
+                    for (size_t col = 0; col < 32; ++col)
+                            frame.at(col, row) = rainbow32(col);
+            return true;
+    });
+
+    lambda_generator test_gen(10, [&](const wav_reader& song,
+                                      chrono::microseconds start,
+                                      frame& frame) -> bool
+    {
+            (void)song;
+            (void)start;
+            for (size_t col = 0; col < 32; ++col)
+                    frame.at(col, 1) = pixel(255, 0, 0);
+            return true;
+    });
+
+    if (type == "fft")
+            fft_gen.play_song(filename);
+    else
+            test_gen.play_song(filename);
 
     return 0;
 }
