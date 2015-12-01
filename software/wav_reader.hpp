@@ -31,7 +31,8 @@ class wav_reader {
         */
         std::vector<float> get_range(std::chrono::microseconds start, 
             std::chrono::microseconds duration) const;
-    
+
+        float max_sample() const;
     private:
         struct riff_header {
             char ck_id[5];                      // should be "RIFF"
@@ -66,6 +67,7 @@ class wav_reader {
 
         int16_t* samples_;         ///> the data samples themselves
         size_t num_samples_;     ///> the number of samples
+        float max_sample_;       ///> max sample
 };
 
 #endif // WAVREADER_HPP_INCLUDED

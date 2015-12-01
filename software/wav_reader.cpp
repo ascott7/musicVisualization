@@ -19,6 +19,7 @@
 #include <cstring>
 #include <iostream>
 #include <fstream>
+#include <algorithm>
 using namespace std;
 
 #define CHUNK_SIZE_LENGTH 4
@@ -43,6 +44,7 @@ wav_reader::wav_reader(string filename)
             read_general_chunk(file_data, file_offset);
         }
 
+
         delete[] file_data;
     }
     else {
@@ -56,6 +58,11 @@ wav_reader::~wav_reader()
     if (num_samples_ > 0) {
         delete[] samples_;
     }
+}
+
+float wav_reader::max_sample() const
+{
+        return max_sample_;
 }
 
 vector<float> wav_reader::get_range(chrono::microseconds start, 
@@ -151,6 +158,11 @@ void wav_reader::read_general_chunk(char* file_data, size_t& file_offset)
                         samples_[(i - (file_offset + 8)) / 2] = sample;
                 }
         }
+        /*float max = -0.0/1.0;
+        for (size_t i = 0; i < num_samples; i++) {
+                if (sam
+                }*/
+        max_sample_ = *max_element(samples_, samples_ + num_samples_);
     }
 
     file_offset = file_offset + size + CHUNK_ID_LENGTH + CHUNK_SIZE_LENGTH;
