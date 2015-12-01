@@ -5,3 +5,4 @@ reset
 wav_reader_test
 *.dSYM
 visualize
+one_frame
