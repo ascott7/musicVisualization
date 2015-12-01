@@ -189,77 +189,74 @@ bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
                                               frame& frame)
 {
         size_t x, y;
+        vector<complex<float>> spec;
         array<pixel, frame::HEIGHT> new_col;
-        vector<float> sample = song.get_range(start,
-                                              start + get_frame_interval());
-        size_t csize = next_power_of2_or_zero(sample.size());
-        vector<complex<float>> c_sample;
 
-        // copy the real sample to a complex array and 0-pad it to
-        // a power of 2 size
-        copy(sample.begin(), sample.end(), back_inserter(c_sample));
-        fill_n(back_inserter(c_sample), csize - c_sample.size(), 0);
-        if (fft(c_sample))
+        if (max_ == -0.0/1.0)
+                max_ = song.max_sample();
+
+        if (!make_spectrum(song, start, spec))
                 return false;
 
-        new_col = make_next_column(c_sample);
+        new_col = pick_pixels(spec);
 
         for (y = 0; y < frame::HEIGHT; ++y) {
                 for (x = frame::WIDTH; x-- > 1;)
                         frame.at(x, y) = frame.at(x-1, y);
-
                 frame.at(0, y) = new_col.at(y);
         }
         return true;
 }
 
-array<pixel, frame::HEIGHT>
-scrolling_fft_generator::make_next_column(vector<complex<float>>& spectrum)
+bool
+scrolling_fft_generator::make_spectrum(const wav_reader& song,
+                                       std::chrono::microseconds start,
+                                       vector<complex<float>>& spec)
 {
-        array<pixel, frame::HEIGHT> binned;
-        complex<float> max, sum;
-        vector<complex<float>>::iterator it;
-        unsigned bin_size;
+        vector<float> sample = song.get_range(start, start
+                                              + get_frame_interval());
+        size_t size = next_power_of2_or_zero(sample.size());
+       
+        // copy the real sample to a complex array and 0-pad it to
+        // a power of 2 size
+        copy(sample.begin(), sample.end(), back_inserter(spec));
+        fill_n(back_inserter(spec), size - spec.size(), 0);
 
-        // find the max element in the spectrum
-        max = *max_element(spectrum.begin(), spectrum.end(),
-                          [&](complex<float>& lhs, complex<float>& rhs) {
-                return abs(lhs) < abs(rhs);
-        });
-
-        // normalize by that element
-        for_each(spectrum.begin(), spectrum.end(), [&](complex<float>& i) {
-                i /= max;
-        });
-
-        // bin the spectrum. each element in the binned spectrum gets the
-        // average of the next bin_size elements from the spectrum. We
-        // multiply binned.size() by 2 because we only want half of
-        // the spectrum (it's symetric)
-        it = spectrum.begin();
-        bin_size = spectrum.size()/(2*binned.size());
-        for_each(binned.begin(), binned.end(), [&](pixel& pix) {
-                sum = 0;
-                for_each(it, it + bin_size, [&](complex<float>& i) {
-                        sum += i;
-                });
-
-                pix = normal_to_pixel(abs(sum/complex<float>(bin_size)));
-                it += bin_size;
-        });
-
-        return binned;
+        return fft(spec) == 0;
 }
 
-pixel scrolling_fft_generator::normal_to_pixel(float norm)
+static pixel rainbow(float x)
 {
-        uint8_t max = numeric_limits<uint8_t>::max();
-        assert(norm <= 1.0);
+        float f = 2*M_PI*x;
+        float phase = 2*M_PI/3;
+        
+        return pixel(127*(1 + cos(f)),
+                     127*(1 + cos(f - phase)),
+                     127*(1 + cos(f - 2*phase)));
+}
 
-        // for now we just use a green/blue pixel, with high values
-        // being all green and low values being all blue
-        return norm > cutoff_ ? pixel(0, norm*max, (1.0 - norm)*max)
-                : pixel();
+array<pixel, frame::HEIGHT>
+scrolling_fft_generator::pick_pixels(const vector<complex<float>>& spec)
+{
+        size_t bin_size = log2(spec.size());
+        float average;
+        float bin;
+        array<pixel, frame::HEIGHT> col;
+        auto iter = spec.begin();
+
+        for_each(col.begin(), col.end(), [&](pixel& pix) {
+                average = 0;
+                for_each(iter, iter + bin_size, [&](const complex<float>& f) {
+                        average += abs(f);
+                });
+                iter += bin_size;
+                bin = average/(bin_size*max_);
+                bin = bin > cutoff_ ? bin : 0;
+                pix = rainbow(bin);
+                bin_size *= 2;
+        });
+
+        return col;
 }
 
 unsigned scrolling_fft_generator::get_frame_rate() const
