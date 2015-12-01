@@ -64,7 +64,7 @@ class wav_reader {
 
         void read_general_chunk(char* file_data, size_t& file_offset);
 
-        uint8_t* samples_;         ///> the data samples themselves
+        int16_t* samples_;         ///> the data samples themselves
         size_t num_samples_;     ///> the number of samples
 };
 

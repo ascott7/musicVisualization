@@ -65,7 +65,7 @@ vector<float> wav_reader::get_range(chrono::microseconds start,
     float samples_per_micros = float(fmt_chunk.dw_samples_per_sec) / 1000000;
     uint32_t start_index = uint32_t(samples_per_micros * start.count());
     uint32_t range_length = uint32_t(samples_per_micros * duration.count());
-    for (uint32_t i = 0; i < range_length; i++) {
+    for (uint32_t i = start_index; i < range_length; i++) {
             if (start_index + i >= num_samples_)
                     return samples_in_range;
         samples_in_range.push_back(float(samples_[start_index + i]));
@@ -134,9 +134,22 @@ void wav_reader::read_general_chunk(char* file_data, size_t& file_offset)
     // if we are at the data chunk, get the data samples
     if (strcmp(id, "data") == 0) {
         num_samples_ = size;
-        samples_ = new uint8_t[size];
-        for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_; i++) {
-            samples_[i - (file_offset + 8)] = uint8_t(file_data[i]);
+        if (fmt_chunk.w_bits_per_sample == 8) {
+                cout << "8 bits" << endl;
+                samples_ = new int16_t[size];
+                for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_; i++) {
+                        samples_[i - (file_offset + 8)] = 0x00 | uint8_t(file_data[i]);
+                }
+        }
+        else if (fmt_chunk.w_bits_per_sample == 16) {
+                cout << "16 bits" << endl;
+                samples_ = new int16_t[size];
+                for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_; i+=2) {
+                        uint8_t bit1 = uint8_t(file_data[i]);
+                        uint8_t bit2 = uint8_t(file_data[i + 1]);
+                        int16_t sample = int16_t(bit1) << 8 | bit2;
+                        samples_[(i - (file_offset + 8)) / 2] = sample;
+                }
         }
     }
 
