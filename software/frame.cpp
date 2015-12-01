@@ -19,6 +19,7 @@
 #include <limits>
 #include <stdexcept>
 #include <thread>
+#include <iostream>
 
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -238,23 +239,28 @@ static pixel rainbow(float x)
 array<pixel, frame::HEIGHT>
 scrolling_fft_generator::pick_pixels(const vector<complex<float>>& spec)
 {
-        size_t bin_size = log2(spec.size());
+        const size_t first_bin = 10;
+        size_t bin_size = first_bin;
+        float alpha = pow(M_E, log(spec.size()/first_bin)/frame::HEIGHT);
+        cout << "alpha " << alpha << " spec size " << spec.size() << endl;
         float average;
         float bin;
         array<pixel, frame::HEIGHT> col;
         auto iter = spec.begin();
-
-        for_each(col.begin(), col.end(), [&](pixel& pix) {
+        size_t i = 0;
+    
+        for (i = 0; i < col.size(); ++i) {
                 average = 0;
+                bin_size = first_bin*pow(alpha, i);
+                cout << bin_size << " " << endl;
                 for_each(iter, iter + bin_size, [&](const complex<float>& f) {
                         average += abs(f);
                 });
                 iter += bin_size;
                 bin = average/(bin_size*max_);
                 bin = bin > cutoff_ ? bin : 0;
-                pix = rainbow(bin);
-                bin_size *= 2;
-        });
+                col[i] = rainbow(bin);
+        }
 
         return col;
 }
