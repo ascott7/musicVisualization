@@ -1,4 +1,9 @@
-pin assignments for matrix:
+pin assignments:
+
+clk 88
+reset 39
+sck 43
+sdi 42
 
 r1 59
 g1 60
