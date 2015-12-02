@@ -102,6 +102,16 @@ private:
         std::array<pixel, frame::HEIGHT>
         pick_pixels(const std::vector<std::complex<float>>& spec);
 
+        // given a float in the range 0 <= x < 1, compute the pixel value
+        // that is x percent of the way through a rainbow
+        static pixel rainbow(float x);
+
+        // In pick_pixels we want to bin the spectrum into bins of
+        // logrithmic size where each bin size is b_i = alpha*b_{i-1}.
+        // This function computes alpha given b_0, the size of the first
+        // bin and n, the number of samples of in the spectrum
+        static float compute_alpha(size_t b_0, size_t n);
+
         const unsigned frame_rate_;
         float cutoff_;
         float max_ = -0.0/1.0;

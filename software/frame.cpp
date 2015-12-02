@@ -223,10 +223,10 @@ scrolling_fft_generator::make_spectrum(const wav_reader& song,
         copy(sample.begin(), sample.end(), back_inserter(spec));
         fill_n(back_inserter(spec), size - spec.size(), 0);
 
-        return fft(spec) == 0;
+        return fft(spec) == 0 && spec.size() > frame::HEIGHT;
 }
 
-static pixel rainbow(float x)
+pixel scrolling_fft_generator::rainbow(float x)
 {
         float f = 2*M_PI*x;
         float phase = 2*M_PI/3;
@@ -236,13 +236,35 @@ static pixel rainbow(float x)
                      127*(1 + cos(f - 2*phase)));
 }
 
+// we implement this using guess and check because hey, it works, and it's
+// pretty quick. Basically we just keep guessing at alpha untill we get
+// close enough to n
+float
+scrolling_fft_generator::compute_alpha(size_t b_0, size_t n)
+{
+        float alpha = 1.0;
+        float step = 0.001;
+        float tolerance = 1.0;
+        float delta;
+
+        n /= b_0;
+
+        for (;;) {
+                delta = n - (pow(alpha, frame::HEIGHT) - 1)/(alpha - 1);
+                if (delta > 0 && delta < tolerance)
+                        return alpha;
+                else if (delta < 0)
+                         return alpha - step;
+                alpha += step;
+        }
+}
+
 array<pixel, frame::HEIGHT>
 scrolling_fft_generator::pick_pixels(const vector<complex<float>>& spec)
 {
-        const size_t first_bin = 10;
-        size_t bin_size = first_bin;
-        float alpha = pow(M_E, log(spec.size()/first_bin)/frame::HEIGHT);
-        cout << "alpha " << alpha << " spec size " << spec.size() << endl;
+        const size_t b_0 = 10;
+        size_t b;
+        float alpha = compute_alpha(b_0, spec.size());
         float average;
         float bin;
         array<pixel, frame::HEIGHT> col;
@@ -251,17 +273,15 @@ scrolling_fft_generator::pick_pixels(const vector<complex<float>>& spec)
     
         for (i = 0; i < col.size(); ++i) {
                 average = 0;
-                bin_size = first_bin*pow(alpha, i);
-                cout << bin_size << " " << endl;
-                for_each(iter, iter + bin_size, [&](const complex<float>& f) {
+                b = b_0*pow(alpha, i);
+                for_each(iter, iter + b, [&](const complex<float>& f) {
                         average += abs(f);
                 });
-                iter += bin_size;
-                bin = average/(bin_size*max_);
+                iter += b;
+                bin = average/(b*max_);
                 bin = bin > cutoff_ ? bin : 0;
                 col[i] = rainbow(bin);
         }
-
         return col;
 }
 
