@@ -7,8 +7,7 @@
  */
 
 #include "piHelpers.h"
-
-#define RESET_PIN 20
+#include "system_constants.hpp"
 
 int main (void)
 {

@@ -1,0 +1,6 @@
+#ifndef SYSTEM_CONSTANTS_H
+#define SYSTEM_CONSTANTS_H
+
+#define RESET_PIN 20
+
+#endif // SYSTEM_CONSTANTS_H

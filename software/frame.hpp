@@ -93,15 +93,18 @@ protected:
         unsigned get_frame_rate() const;
 
 private:
-        // convert a sample to a column of pixels to write out next
-        std::array<pixel, frame::HEIGHT>
-        make_next_column(std::vector<std::complex<float>>& sample);
+        // create the spectrum of the next time sample
+        bool make_spectrum(const wav_reader& song,
+                           std::chrono::microseconds start,
+                           std::vector<std::complex<float>>& spec);
 
-        // convert a normalized, binned, spectrum sample to a pixel value.
-        pixel normal_to_pixel(float norm);
-        
+        // use spectrum to choose the next column of pixels to display
+        std::array<pixel, frame::HEIGHT>
+        pick_pixels(const std::vector<std::complex<float>>& spec);
+
         const unsigned frame_rate_;
         float cutoff_;
+        float max_ = -0.0/1.0;
 };
 
 // lambda generator. holds a function that is called in place of
