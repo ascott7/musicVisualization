@@ -53,13 +53,6 @@ wav_reader::wav_reader(string filename)
     }
 }
 
-wav_reader::~wav_reader()
-{
-    if (num_samples_ > 0) {
-        delete[] samples_;
-    }
-}
-
 float wav_reader::max_sample() const
 {
         return max_sample_;
@@ -77,9 +70,6 @@ vector<float> wav_reader::get_range(chrono::microseconds start,
                     return samples_in_range;
         samples_in_range.push_back(float(samples_[start_index + i]));
     }
-    // this print statement appears to work (it prints out what we expect)
-    // but it also causes a memory leak for some reason
-    // cout << samples_in_range.at(0) << endl;
     return samples_in_range;
 }
 
@@ -126,8 +116,6 @@ void wav_reader::read_general_chunk(char* file_data, size_t& file_offset)
     id[4] = '\0';
     size_t size = *(uint32_t *) (file_data + sizeof(char) * (file_offset + 4));
 
-    cout << id << endl;
-
     // if we are at the format chunk, get the formatting information
     if (strcmp(id, "fmt ") == 0) {
         fmt_chunk.ck_size = *(size_t *) (file_data + sizeof(char) * 4);
@@ -142,27 +130,20 @@ void wav_reader::read_general_chunk(char* file_data, size_t& file_offset)
     if (strcmp(id, "data") == 0) {
         num_samples_ = size;
         if (fmt_chunk.w_bits_per_sample == 8) {
-                cout << "8 bits" << endl;
-                samples_ = new int16_t[size];
                 for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_; i++) {
-                        samples_[i - (file_offset + 8)] = 0x00 | uint8_t(file_data[i]);
+                        samples_.push_back(uint8_t(file_data[i]));
                 }
         }
         else if (fmt_chunk.w_bits_per_sample == 16) {
-                cout << "16 bits" << endl;
-                samples_ = new int16_t[size];
                 for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_; i+=2) {
                         uint8_t bit1 = uint8_t(file_data[i]);
                         uint8_t bit2 = uint8_t(file_data[i + 1]);
                         int16_t sample = int16_t(bit1) << 8 | bit2;
-                        samples_[(i - (file_offset + 8)) / 2] = sample;
+                        samples_.push_back(sample);
                 }
         }
-        /*float max = -0.0/1.0;
-        for (size_t i = 0; i < num_samples; i++) {
-                if (sam
-                }*/
-        max_sample_ = *max_element(samples_, samples_ + num_samples_);
+
+        max_sample_ = float(*max_element(samples_.begin(), samples_.end()));
     }
 
     file_offset = file_offset + size + CHUNK_ID_LENGTH + CHUNK_SIZE_LENGTH;
