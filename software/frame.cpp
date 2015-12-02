@@ -262,25 +262,19 @@ scrolling_fft_generator::compute_alpha(size_t b_0, size_t n)
 array<pixel, frame::HEIGHT>
 scrolling_fft_generator::pick_pixels(const vector<complex<float>>& spec)
 {
-        const size_t b_0 = 10;
-        size_t b;
+        const size_t b_0 = 8;
         float alpha = compute_alpha(b_0, spec.size());
-        float average;
-        float bin;
-        array<pixel, frame::HEIGHT> col;
         auto iter = spec.begin();
-        size_t i = 0;
-    
-        for (i = 0; i < col.size(); ++i) {
-                average = 0;
+        array<pixel, frame::HEIGHT> col;
+        complex<float> sum;
+        size_t i, b;
+        float bin;
+
+        for (i = 0; i < col.size(); ++i, iter += b) {
                 b = b_0*pow(alpha, i);
-                for_each(iter, iter + b, [&](const complex<float>& f) {
-                        average += abs(f);
-                });
-                iter += b;
-                bin = average/(b*max_);
-                bin = bin > cutoff_ ? bin : 0;
-                col[i] = rainbow(bin);
+                sum = accumulate(iter, iter + b);
+                bin = log(abs(sum) + 1)/log(b*max_ + 1);
+                col[i] = rainbow(bin > cutoff_ ? bin : 0);
         }
         return col;
 }
