@@ -139,16 +139,12 @@ void wav_reader::read_general_chunk(char* file_data, size_t& file_offset)
                 }
         }
         else if (fmt_chunk.w_bits_per_sample == 16) {
-                for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_; i+=2) {
+                num_samples_ /= 2;
+                for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_ * 2; i+=2) {
                         uint8_t bit1 = uint8_t(file_data[i]);
                         uint8_t bit2 = uint8_t(file_data[i + 1]);
                         int16_t sample = int16_t(bit2) << 8 | bit1;
                         samples_.push_back(sample);
-                        if (i < file_offset + 8 + 10) {
-                            cout << sample << " ";
-                            cout << endl;
-                        }
-
                 }
         }
 
