@@ -32,6 +32,10 @@ class wav_reader {
             std::chrono::microseconds duration) const;
 
         float max_sample() const;
+
+        // return the entire song
+        const std::vector<float>& get_all_samples() const;
+        std::vector<float> get_all_samples() const;
     private:
         struct riff_header {
             char ck_id[5];                      // should be "RIFF"

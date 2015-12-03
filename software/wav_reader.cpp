@@ -74,6 +74,16 @@ vector<float> wav_reader::get_range(chrono::microseconds start,
     return samples_in_range;
 }
 
+const vector<float>& wav_reader::get_all_samples() const
+{
+        return samples_;
+}
+
+vector<float> wav_reader::get_all_samples() const
+{
+        return samples_;
+}
+
 size_t wav_reader::read_header_chunk(ifstream& file)
 {
     char* header_chunk;
