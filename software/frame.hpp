@@ -82,7 +82,7 @@ private:
 // basic fft frame generator. not yet implemented
 class scrolling_fft_generator : public frame_generator {
 public:
-        scrolling_fft_generator(unsigned frame_rate, float cutoff, float spec_frac);
+        scrolling_fft_generator(unsigned frame_rate);
         ~scrolling_fft_generator() = default;
 
 protected:
@@ -93,6 +93,9 @@ protected:
         unsigned get_frame_rate() const;
 
 private:
+        // find what fraction of the spectrum has interesting data
+        void calc_parameters(const wav_reader& song);
+        
         // create the spectrum of the next time sample
         bool make_spectrum(const wav_reader& song,
                            std::chrono::microseconds start,
@@ -115,7 +118,7 @@ private:
         const unsigned frame_rate_;
         float cutoff_;
         float max_ = -0.0/1.0;
-        const float spec_frac_;
+        float spec_frac_;
 };
 
 // lambda generator. holds a function that is called in place of

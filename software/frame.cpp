@@ -161,29 +161,43 @@ void frame_generator::play_song(const string& fname)
         waitpid(pid, NULL, 0);
 }
 
-scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate, float cutoff,
-                                                 float spec_frac)
-        : frame_rate_(frame_rate), cutoff_(cutoff), spec_frac_(spec_frac)
+scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate)
+        : frame_rate_(frame_rate), cutoff_(0.0), spec_frac_(0.5)
 {}
 
-// get the next power of 2 above v, unless v is a power of 2, in which case
-// return v. If v is zero, we return 0 because even though that's mathematically
-// wrong it's convenient.
-//
-// taken from here:
-// http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2Float
-static size_t next_power_of2_or_zero(size_t v)
-{
-        size_t t;
-        float f;
 
-        if (v > 1) {
-                f = (float)v;
-                t = 1U << ((*(unsigned int *)&f >> 23) - 0x7f);
-                return t << (t < v);
-        } else
-                return v;
+
+void scrolling_fft_generator::calc_parameters(const wav_reader& song)
+{
+        vector<float> samples = song.get_all_samples();
+        vector<complex<float>> spec;
+        size_t i;
+
+        copy(samples.begin(), samples.end(), back_inserter(spec));
+        fft(spec);
+
+        if (max_ == -0.0/1.0)
+                max_ = song.max_sample();
+
+        auto complex_less = [&] (complex<float>& a, complex<float>& b) {return abs(a) < abs(b);};
+        
+        complex<float> max_amp = *max_element(spec.begin(), spec.end(), complex_less);
+        float tolerance = 0.01;
+        
+        for (i = spec.size()/2; i-- > 0; ) {
+                if (abs(spec.at(i)) < abs(tolerance*max_amp)) {
+                        spec_frac_ = i / float(spec.size());
+                        break;
+                }
+        }
+
+        float cutoff_percentile = 0.995;
+        size_t cutoff_index = cutoff_percentile * spec.size();
+        nth_element(spec.begin(), spec.begin() + cutoff_index, spec.end(), complex_less);
+        cutoff_ = log(abs(spec.at(cutoff_index)) + 1) / log(max_);
+        cout << "spec_frac is " << spec_frac_ << " cutoff is " << cutoff_ << endl;
 }
+
 
 bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
                                               std::chrono::microseconds start,
@@ -192,9 +206,11 @@ bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
         size_t x, y;
         vector<complex<float>> spec;
         array<pixel, frame::HEIGHT> new_col;
-
-        if (max_ == -0.0/1.0)
-                max_ = song.max_sample();
+        static bool called = false;
+        if (!called) {
+                called = true;
+                calc_parameters(song);
+        }
 
         if (!make_spectrum(song, start, spec))
                 return false;
@@ -215,7 +231,6 @@ scrolling_fft_generator::make_spectrum(const wav_reader& song,
                                        vector<complex<float>>& spec)
 {
         vector<float> sample = song.get_range(start, get_frame_interval());
-        size_t size = next_power_of2_or_zero(sample.size());
         size_t i, n;
         float sigma = 0.45;
 
@@ -226,11 +241,8 @@ scrolling_fft_generator::make_spectrum(const wav_reader& song,
                 sample.at(i) *= pow(M_E, -0.5*pow((i - (n - 1)/2)/
                                                   (sigma*(n-1)/2), 2));
 
-        // copy the real sample to a complex array and 0-pad it to
-        // a power of 2 size
+        // copy the real sample to a complex sample
         copy(sample.begin(), sample.end(), back_inserter(spec));
-        fill_n(back_inserter(spec), size - spec.size(), 0);
-
         return fft(spec) == 0 && spec.size() > frame::HEIGHT;
 }
 
