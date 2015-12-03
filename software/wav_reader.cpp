@@ -66,13 +66,10 @@ vector<float> wav_reader::get_range(chrono::microseconds start,
     const uint32_t start_index = uint32_t(samples_per_micros * start.count());
     const uint32_t range_length = uint32_t(samples_per_micros * duration.count());
     for (uint32_t i = start_index; i < start_index + range_length; i++) {
-            if (start_index + i >= samples_.size())
+            if (i >= samples_.size())
                     return samples_in_range;
-            samples_in_range.push_back(float(samples_.at(start_index + i)));
+            samples_in_range.push_back(float(samples_.at(i)));
     }
-
-    cout << "samples_.size(): " << samples_.size() << ", num_samples_: "
-         << num_samples_ << endl;
 
     return samples_in_range;
 }
