@@ -32,5 +32,7 @@ int main(void)
                 for (size_t col = 0; col < 32; ++col)
                         f.at(col, row) = rainbow32(row);
 
+        f.write();
+
         return 0;
 }
