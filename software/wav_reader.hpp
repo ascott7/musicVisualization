@@ -34,7 +34,6 @@ class wav_reader {
         float max_sample() const;
 
         // return the entire song
-        const std::vector<float>& get_all_samples() const;
         std::vector<float> get_all_samples() const;
     private:
         struct riff_header {

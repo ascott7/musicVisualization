@@ -18,6 +18,7 @@
 
 #include <cstring>
 #include <iostream>
+#include <iterator>
 #include <fstream>
 #include <algorithm>
 using namespace std;
@@ -74,14 +75,11 @@ vector<float> wav_reader::get_range(chrono::microseconds start,
     return samples_in_range;
 }
 
-const vector<float>& wav_reader::get_all_samples() const
-{
-        return samples_;
-}
-
 vector<float> wav_reader::get_all_samples() const
 {
-        return samples_;
+        vector<float> samples;
+        copy(samples_.begin(), samples_.end(), back_inserter(samples));
+        return samples;
 }
 
 size_t wav_reader::read_header_chunk(ifstream& file)
