@@ -146,7 +146,6 @@ void frame_generator::play_song(const string& fname)
                 // configure the pi to play audio through the audio jack
                 system("amixer cset numid=3 1");
                 system(("aplay " + fname).c_str());
-                cout << "called aplay, exiting" << endl;
                 exit(0);
         } else {
                 start = clock_t::now();
@@ -159,10 +158,7 @@ void frame_generator::play_song(const string& fname)
                         this_thread::sleep_until(next_start);
                 }
         }
-
-        cout << "about to wait..." << endl;
-        waitpid(pid, NULL, WEXITED);
-        cout << "finished waiting." << endl;
+        waitpid(pid, NULL, 0);
 }
 
 scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate, float cutoff,
