@@ -130,19 +130,44 @@ void wav_reader::read_general_chunk(char* file_data, size_t& file_offset)
     // if we are at the data chunk, get the data samples
     if (strcmp(id, "data") == 0) {
         num_samples_ = size;
-        if (fmt_chunk.w_bits_per_sample == 8) {
-                for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_; i++) {
-                        samples_.push_back(uint8_t(file_data[i]));
-                }
-        }
-        else if (fmt_chunk.w_bits_per_sample == 16) {
-                num_samples_ /= 2;
-                for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_ * 2; i+=2) {
-                        uint8_t bit1 = uint8_t(file_data[i]);
-                        uint8_t bit2 = uint8_t(file_data[i + 1]);
-                        int16_t sample = int16_t(bit2) << 8 | bit1;
-                        samples_.push_back(sample);
-                }
+        if (fmt_chunk.w_channels == 1) {
+            if (fmt_chunk.w_bits_per_sample == 8) {
+                    for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_; i++) {
+                            samples_.push_back(uint8_t(file_data[i]));
+                    }
+            }
+            else if (fmt_chunk.w_bits_per_sample == 16) {
+                    num_samples_ /= 2;
+                    for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_ * 2; i+=2) {
+                            uint8_t byte1 = uint8_t(file_data[i]);
+                            uint8_t byte2 = uint8_t(file_data[i + 1]);
+                            int16_t sample = int16_t(byte2) << 8 | byte1;
+                            samples_.push_back(sample);
+                    }
+            }
+        } else if (fmt_chunk.w_channels == 2) {
+            if (fmt_chunk.w_bits_per_sample == 8) {
+                    num_samples_ /= 2;
+                    for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_ * 2; i+=2) {
+                            uint8_t byte1 = uint8_t(file_data[i]);
+                            uint8_t byte2 = uint8_t(file_data[i + 1]);
+                            int16_t sample = (byte1 + byte2) / 2;
+                            samples_.push_back(sample);
+                    }
+            }
+            else if (fmt_chunk.w_bits_per_sample == 16) {
+                    num_samples_ /= 4;
+                    for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_ * 4; i+=4) {
+                            uint8_t byte1 = uint8_t(file_data[i]);
+                            uint8_t byte2 = uint8_t(file_data[i + 1]);
+                            uint8_t byte3 = uint8_t(file_data[i + 2]);
+                            uint8_t byte4 = uint8_t(file_data[i + 3]);
+                            int16_t sample1 = int16_t(byte2) << 8 | byte1;
+                            int16_t sample2 = int16_t(byte4) << 8 | byte3;
+                            int16_t sample = (int32_t(sample1) + sample2) / 2;
+                            samples_.push_back(sample);
+                    }
+            }
         }
 
         max_sample_ = float(*max_element(samples_.begin(), samples_.end()));
