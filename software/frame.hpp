@@ -82,7 +82,7 @@ private:
 // basic fft frame generator. not yet implemented
 class scrolling_fft_generator : public frame_generator {
 public:
-        scrolling_fft_generator(unsigned frame_rate, float cutoff);
+        scrolling_fft_generator(unsigned frame_rate, float cutoff, float spec_frac);
         ~scrolling_fft_generator() = default;
 
 protected:
@@ -115,6 +115,7 @@ private:
         const unsigned frame_rate_;
         float cutoff_;
         float max_ = -0.0/1.0;
+        const float spec_frac_;
 };
 
 // lambda generator. holds a function that is called in place of

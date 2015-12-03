@@ -48,16 +48,16 @@ int main (int argc, char** argv)
 
     pioInit();
     pTimerInit();
-    spiInit(244000, 0);
+    spiInit(7812000, 0);
 
     pinMode(RESET_PIN, OUTPUT);
     digitalWrite(RESET_PIN, 1);
     digitalWrite(RESET_PIN, 0);
 
-    size_t frame_rate = 8;
-    float cutoff = 0.002;
-    float spec_frac = 0.5;
-    scrolling_fft_generator fft_gen(frame_rate, cutoff);
+    size_t frame_rate = 50;
+    float cutoff = 0.3;
+    float spec_frac = 0.02;
+    scrolling_fft_generator fft_gen(frame_rate, cutoff, spec_frac);
 
     // at some point we should move cool shit to another file, but for
     // now I'm just dumping it here. This makes a rainbow.

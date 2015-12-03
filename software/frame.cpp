@@ -146,6 +146,7 @@ void frame_generator::play_song(const string& fname)
                 // configure the pi to play audio through the audio jack
                 system("amixer cset numid=3 1");
                 system(("aplay " + fname).c_str());
+                cout << "called aplay, exiting" << endl;
                 exit(0);
         } else {
                 start = clock_t::now();
@@ -159,11 +160,14 @@ void frame_generator::play_song(const string& fname)
                 }
         }
 
+        cout << "about to wait..." << endl;
         waitpid(pid, NULL, WEXITED);
+        cout << "finished waiting." << endl;
 }
 
-scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate, float cutoff)
-        : frame_rate_(frame_rate), cutoff_(cutoff)
+scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate, float cutoff,
+                                                 float spec_frac)
+        : frame_rate_(frame_rate), cutoff_(cutoff), spec_frac_(spec_frac)
 {}
 
 // get the next power of 2 above v, unless v is a power of 2, in which case
@@ -211,13 +215,21 @@ bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
 
 bool
 scrolling_fft_generator::make_spectrum(const wav_reader& song,
-                                       std::chrono::microseconds start,
+                                       microseconds start,
                                        vector<complex<float>>& spec)
 {
-        vector<float> sample = song.get_range(start, start
-                                              + get_frame_interval());
+        vector<float> sample = song.get_range(start, get_frame_interval());
         size_t size = next_power_of2_or_zero(sample.size());
-       
+        size_t i, n;
+        float sigma = 0.45;
+
+        // use a gaussian window.
+        // https://en.wikipedia.org/wiki/Window_function#Gaussian_window
+        n = sample.size();
+        for (i = 0; i < n; ++i)
+                sample.at(i) *= pow(M_E, -0.5*pow((i - (n - 1)/2)/
+                                                  (sigma*(n-1)/2), 2));
+
         // copy the real sample to a complex array and 0-pad it to
         // a power of 2 size
         copy(sample.begin(), sample.end(), back_inserter(spec));
@@ -230,9 +242,13 @@ pixel scrolling_fft_generator::rainbow(float x)
 {
         float f = 2*M_PI*x;
         float phase = 2*M_PI/3;
+
+        if (x > 1 || x < 0)
+                cout << __func__ << ": got x=" << x << ", which is > 1 or < 0"
+                     << endl;
         
-        return pixel(127*(1 + cos(f)),
-                     127*(1 + cos(f - phase)),
+        return pixel(127*(1 + cos(f - phase)),
+                     127*(1 + cos(f)),
                      127*(1 + cos(f - 2*phase)));
 }
 
@@ -263,8 +279,8 @@ array<pixel, frame::HEIGHT>
 scrolling_fft_generator::pick_pixels(const vector<complex<float>>& spec)
 {
         const size_t b_0 = 8;
-        float alpha = compute_alpha(b_0, spec.size());
-        auto iter = spec.begin();
+        float alpha = compute_alpha(b_0, spec.size()*spec_frac_ - frame_rate_);
+        auto iter = spec.begin() + frame_rate_;
         array<pixel, frame::HEIGHT> col;
         complex<float> sum;
         size_t i, b;
@@ -272,10 +288,18 @@ scrolling_fft_generator::pick_pixels(const vector<complex<float>>& spec)
 
         for (i = 0; i < col.size(); ++i, iter += b) {
                 b = b_0*pow(alpha, i);
-                sum = accumulate(iter, iter + b);
-                bin = log(abs(sum) + 1)/log(b*max_ + 1);
-                col[i] = rainbow(bin > cutoff_ ? bin : 0);
+                sum = accumulate(iter, iter + b, complex<float>(0));
+                bin = log(abs(sum) + 1)/log(b*max_);
+                if (bin < cutoff_)
+                        col[i] = pixel(0,0,0);
+                else {
+                        bin = (bin - cutoff_)/(1 - cutoff_);
+                        bin = pow(bin, 1.0/3);
+                        col[i] = rainbow(0.8 - bin);
+                }
         }
+
+        reverse(col.begin(), col.end());
         return col;
 }
 
