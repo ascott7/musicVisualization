@@ -185,7 +185,7 @@ void frame_generator::play_song(const string& fname)
 }
 
 scrolling_fft_generator::scrolling_fft_generator()
-        : frame_rate_(0), cutoff_(0.0), spec_frac_(0.5)
+        : frame_rate_(0), cutoff_(0.0), max_(0), spec_frac_(0.5)
 {}
 
 void scrolling_fft_generator::calc_parameters(const wav_reader& song)

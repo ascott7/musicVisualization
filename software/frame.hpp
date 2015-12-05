@@ -121,7 +121,7 @@ private:
 
         unsigned frame_rate_;
         float cutoff_;
-        float max_ = -0.0/1.0;
+        float max_;
         float spec_frac_;
 };
 
