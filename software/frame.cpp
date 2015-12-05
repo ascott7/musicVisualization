@@ -168,17 +168,7 @@ void frame_generator::play_song(const string& fname)
                         offset = duration_cast<microseconds>(next_start - start);
                         if (!make_next_frame(song, offset, f))
                                 break;
-                        
                         this_thread::sleep_until(next_start);
-                }
-                // scroll what was on the screen off the screen (a bit hacky
-                // to have this in the frame_generator abstract class but it
-                // was hard to find a better way
-                for (size_t i = 0; i < 32; ++i) {
-                        this_thread::sleep_until(next_start);
-                        f.move_right();
-                        f.write();
-                        next_start = start + ++frame_count*interval;
                 }
         }
         waitpid(pid, NULL, 0);
@@ -227,6 +217,7 @@ bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
         vector<complex<float>> spec;
         array<pixel, frame::HEIGHT> new_col;
         static bool called = false;
+        static size_t final_count = 0;
 
         // if this is our first time being called, calculate/read visualizer
         // parameters
@@ -236,8 +227,18 @@ bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
         }
 
         // generate the spectrum for the current time slice
-        if (!make_spectrum(song, start, spec))
-                return false;
+        if (!make_spectrum(song, start, spec)) {
+            final_count += 1;
+            for (y = 0; y < frame::HEIGHT; ++y) {
+                for (x = frame::WIDTH - 1; x-- > 1;)
+                        frame.at(x, y) = frame.at(x-1, y);
+                frame.at(0, y) = pixel(0, 0, 0);
+            }
+            if (final_count <= 32) {
+                return true;
+            }
+            return false;
+        }
 
         // pick the pixels for the new column
         new_col = pick_pixels(spec);
