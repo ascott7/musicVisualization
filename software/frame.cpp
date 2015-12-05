@@ -184,6 +184,49 @@ void frame_generator::play_song(const string& fname)
         waitpid(pid, NULL, 0);
 }
 
+bool frame_generator::make_spectrum(const wav_reader& song,
+                                    microseconds start,
+                                    vector<complex<float>>& spec)
+{
+        vector<float> sample = song.get_range(start, get_frame_interval());
+        size_t i, n;
+        float sigma = 0.4;
+
+        // use a gaussian window.
+        // https://en.wikipedia.org/wiki/Window_function#Gaussian_window
+        n = sample.size();
+        for (i = 0; i < n; ++i)
+                sample.at(i) *= pow(M_E, -0.5*pow((i - (n - 1)/2)/
+                                                  (sigma*(n-1)/2), 2));
+
+        // copy the real sample to a complex sample
+        copy(sample.begin(), sample.end(), back_inserter(spec));
+        return fft(spec) == 0 && spec.size() > frame::HEIGHT;
+}
+
+// we implement this using guess and check because hey, it works, and it's
+// pretty quick. Basically we just keep guessing at alpha untill we get
+// close enough to n
+float
+frame_generator::compute_alpha(size_t b_0, size_t n)
+{
+        float alpha = 1.0;
+        float step = 0.001;
+        float tolerance = 1.0;
+        float delta;
+
+        n /= b_0;
+
+        for (;;) {
+                delta = n - (pow(alpha, frame::HEIGHT) - 1)/(alpha - 1);
+                if (delta > 0 && delta < tolerance)
+                        return alpha;
+                else if (delta < 0)
+                         return alpha - step;
+                alpha += step;
+        }
+}
+
 scrolling_fft_generator::scrolling_fft_generator()
         : frame_rate_(0), cutoff_(0.0), max_(0), spec_frac_(0.5)
 {}
@@ -251,27 +294,6 @@ bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
         return true;
 }
 
-bool
-scrolling_fft_generator::make_spectrum(const wav_reader& song,
-                                       microseconds start,
-                                       vector<complex<float>>& spec)
-{
-        vector<float> sample = song.get_range(start, get_frame_interval());
-        size_t i, n;
-        float sigma = 0.45;
-
-        // use a gaussian window.
-        // https://en.wikipedia.org/wiki/Window_function#Gaussian_window
-        n = sample.size();
-        //for (i = 0; i < n; ++i)
-        //        sample.at(i) *= pow(M_E, -0.5*pow((i - (n - 1)/2)/
-        //                                          (sigma*(n-1)/2), 2));
-
-        // copy the real sample to a complex sample
-        copy(sample.begin(), sample.end(), back_inserter(spec));
-        return fft(spec) == 0 && spec.size() > frame::HEIGHT;
-}
-
 pixel scrolling_fft_generator::rainbow(float x)
 {
         float f = 2*M_PI*x;
@@ -284,29 +306,6 @@ pixel scrolling_fft_generator::rainbow(float x)
         return pixel(127*(1 + cos(f - phase)),
                      127*(1 + cos(f)),
                      127*(1 + cos(f - 2*phase)));
-}
-
-// we implement this using guess and check because hey, it works, and it's
-// pretty quick. Basically we just keep guessing at alpha untill we get
-// close enough to n
-float
-scrolling_fft_generator::compute_alpha(size_t b_0, size_t n)
-{
-        float alpha = 1.0;
-        float step = 0.001;
-        float tolerance = 1.0;
-        float delta;
-
-        n /= b_0;
-
-        for (;;) {
-                delta = n - (pow(alpha, frame::HEIGHT) - 1)/(alpha - 1);
-                if (delta > 0 && delta < tolerance)
-                        return alpha;
-                else if (delta < 0)
-                         return alpha - step;
-                alpha += step;
-        }
 }
 
 array<pixel, frame::HEIGHT>
@@ -354,6 +353,63 @@ bool lambda_generator::make_next_frame(const wav_reader& song,
 }
 
 unsigned lambda_generator::get_frame_rate() const
+{
+        return frame_rate_;
+}
+
+static_fft_generator::static_fft_generator()
+        : frame_rate_(15), max_(0), rainbow_idx_(0), p_(0, 0, 0)
+{}
+
+pixel static_fft_generator::rainbow(float x)
+{
+        float f = 2*M_PI*x;
+        float phase = 2*M_PI/3;
+        
+        return pixel(127*(1 + cos(f)),
+                     127*(1 + cos(f - phase)),
+                     127*(1 + cos(f - 2*phase)));
+}
+
+bool static_fft_generator::make_next_frame(const wav_reader& song,
+                                           std::chrono::microseconds start,
+                                           frame& frame)
+{
+        static bool called = false;
+        vector<complex<float>> spec;
+        size_t row, col, b;
+        const size_t b_0 = 8;
+        float alpha, bin;
+        typename vector<complex<float>>::iterator iter;
+        complex<float> sum;
+
+        if (!called) {
+                max_ = song.max_sample();
+                called = true;
+        }
+
+        if (!make_spectrum(song, start, spec))
+                return false;
+
+        // clear the frame
+        fill(frame.begin(), frame.end(), pixel(0,0,0));
+        alpha = compute_alpha(b_0, spec.size()*0.5 - frame_rate_);
+        iter = spec.begin();
+        for (col = 0; col < frame::WIDTH; ++col, iter += b) {
+                b = b_0*pow(alpha, col);
+                sum = accumulate(iter, iter + b, complex<float>(0));
+                bin = log(abs(sum) + 1)/log(b*max_);
+                for (row = 0; row < bin*frame::HEIGHT; ++row)
+                        frame.at(col, frame::HEIGHT - (1+row)) = p_;
+        }
+
+        rainbow_idx_ += 0.005;
+        p_ = rainbow(rainbow_idx_);
+
+        return true;
+}
+
+unsigned static_fft_generator::get_frame_rate() const
 {
         return frame_rate_;
 }

@@ -79,6 +79,17 @@ protected:
 
         std::chrono::microseconds get_frame_interval() const;
 
+        // create the spectrum of the next time sample
+        bool make_spectrum(const wav_reader& song,
+                           std::chrono::microseconds start,
+                           std::vector<std::complex<float>>& spec);
+
+        // In pick_pixels we want to bin the spectrum into bins of
+        // logrithmic size where each bin size is b_i = alpha*b_{i-1}.
+        // This function computes alpha given b_0, the size of the first
+        // bin and n, the number of samples of in the spectrum
+        static float compute_alpha(size_t b_0, size_t n);
+
 private:
         using clock_t = std::chrono::high_resolution_clock;
 };
@@ -99,11 +110,7 @@ protected:
 private:
         // find what fraction of the spectrum has interesting data
         void calc_parameters(const wav_reader& song);
-        
-        // create the spectrum of the next time sample
-        bool make_spectrum(const wav_reader& song,
-                           std::chrono::microseconds start,
-                           std::vector<std::complex<float>>& spec);
+       
 
         // use spectrum to choose the next column of pixels to display
         std::array<pixel, frame::HEIGHT>
@@ -112,12 +119,6 @@ private:
         // given a float in the range 0 <= x < 1, compute the pixel value
         // that is x percent of the way through a rainbow
         static pixel rainbow(float x);
-
-        // In pick_pixels we want to bin the spectrum into bins of
-        // logrithmic size where each bin size is b_i = alpha*b_{i-1}.
-        // This function computes alpha given b_0, the size of the first
-        // bin and n, the number of samples of in the spectrum
-        static float compute_alpha(size_t b_0, size_t n);
 
         unsigned frame_rate_;
         float cutoff_;
@@ -143,4 +144,26 @@ protected:
                              std::chrono::microseconds start,
                              frame& frame);
         unsigned get_frame_rate() const;
+};
+
+// just display the FFT
+class static_fft_generator : public frame_generator {
+public:
+        static_fft_generator();
+        ~static_fft_generator() = default;
+
+protected:
+        bool make_next_frame(const wav_reader& song,
+                             std::chrono::microseconds start,
+                             frame& frame);
+
+        unsigned get_frame_rate() const;
+
+private:
+        static pixel rainbow(float x);
+
+        unsigned frame_rate_;
+        float max_;
+        float rainbow_idx_;
+        pixel p_;
 };

@@ -5,7 +5,7 @@ CXXFLAGS = $(__FLAGS) -std=c++11
 CC=clang
 CFLAGS= $(__FLAGS) -std=c99
 
-TARGETS=wav_reader_test fft_test scrolling_fft fft_test2 reset one_frame
+TARGETS=wav_reader_test fft_test scrolling_fft fft_test2 reset one_frame static_fft
 
 export MAKEFLAGS="-j 4"
 
@@ -23,6 +23,9 @@ fft_test2: fft_test2.cpp wav_reader.o fft.hpp
 	$(CXX) $(CXXFLAGS) -o $@ fft_test2.cpp wav_reader.o
 
 scrolling_fft: scrolling_fft.cpp frame.o wav_reader.o piHelpers.o
+	$(CXX) $(CXXFLAGS) -o $@ $^
+
+static_fft: static_fft.cpp frame.o wav_reader.o piHelpers.o
 	$(CXX) $(CXXFLAGS) -o $@ $^
 
 reset: reset.cpp piHelpers.o
