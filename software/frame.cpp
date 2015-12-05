@@ -142,7 +142,7 @@ void frame_generator::play_song(const string& fname)
         wav_reader song(fname);
         clock_t::time_point start, next_start;
         size_t frame_count = 0;
-        microseconds offset, interval = get_frame_interval();
+        microseconds offset, interval;
         pid_t pid;
         frame f;
 
@@ -161,6 +161,7 @@ void frame_generator::play_song(const string& fname)
                 exit(0);
         } else {
                 start = clock_t::now();
+                interval = get_frame_interval();
                 for (;;) {
                         f.write();
                         next_start = start + ++frame_count*interval;
@@ -183,11 +184,9 @@ void frame_generator::play_song(const string& fname)
         waitpid(pid, NULL, 0);
 }
 
-scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate)
-        : frame_rate_(frame_rate), cutoff_(0.0), spec_frac_(0.5)
+scrolling_fft_generator::scrolling_fft_generator()
+        : frame_rate_(0), cutoff_(0.0), spec_frac_(0.5)
 {}
-
-
 
 void scrolling_fft_generator::calc_parameters(const wav_reader& song)
 {
@@ -200,11 +199,18 @@ void scrolling_fft_generator::calc_parameters(const wav_reader& song)
                         if (line.find("order") != string::npos) {
                                 continue;
                         }
-                        if (count == 1) {
+                        switch (count) {
+                        case 1:
                                 cutoff_ = stof(line);
-                        }
-                        else if (count == 2) {
+                                break;
+                        case 2:
                                 spec_frac_ = stof(line);
+                                break;
+                        case 3:
+                                frame_rate_ = stoul(line);
+                                break;
+                        default:
+                                break;
                         }
                         count++;
                 }
@@ -221,16 +227,22 @@ bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
         vector<complex<float>> spec;
         array<pixel, frame::HEIGHT> new_col;
         static bool called = false;
+
+        // if this is our first time being called, calculate/read visualizer
+        // parameters
         if (!called) {
                 called = true;
                 calc_parameters(song);
         }
 
+        // generate the spectrum for the current time slice
         if (!make_spectrum(song, start, spec))
                 return false;
 
+        // pick the pixels for the new column
         new_col = pick_pixels(spec);
 
+        // shift the frame over and add the new column on the left edge
         for (y = 0; y < frame::HEIGHT; ++y) {
                 for (x = frame::WIDTH - 1; x-- > 1;)
                         frame.at(x, y) = frame.at(x-1, y);

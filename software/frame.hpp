@@ -86,7 +86,7 @@ private:
 // basic fft frame generator. not yet implemented
 class scrolling_fft_generator : public frame_generator {
 public:
-        scrolling_fft_generator(unsigned frame_rate);
+        scrolling_fft_generator();
         ~scrolling_fft_generator() = default;
 
 protected:
@@ -119,7 +119,7 @@ private:
         // bin and n, the number of samples of in the spectrum
         static float compute_alpha(size_t b_0, size_t n);
 
-        const unsigned frame_rate_;
+        unsigned frame_rate_;
         float cutoff_;
         float max_ = -0.0/1.0;
         float spec_frac_;

@@ -28,11 +28,10 @@ int main(void)
         digitalWrite(RESET_PIN, 1);
         digitalWrite(RESET_PIN, 0);
 
-        for (size_t row = 0; row < 32; ++row)
-                for (size_t col = 0; col < 32; ++col)
+        for (row = 0; row < 32; ++row)
+                for (col = 0; col < 32; ++col)
                         f.at(col, row) = rainbow32(row);
 
         f.write();
-
         return 0;
 }
