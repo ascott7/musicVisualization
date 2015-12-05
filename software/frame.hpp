@@ -50,6 +50,10 @@ public:
         // write the contents of the frame over SPI to the FPGA
         void write() const;
 
+        // move all of the columns of the frame one to the right, replacing
+        // with empty pixels
+        void move_right();
+
         static constexpr unsigned WIDTH = 32;
         static constexpr unsigned HEIGHT = 32;
 };

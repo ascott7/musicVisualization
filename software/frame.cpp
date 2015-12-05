@@ -1,3 +1,4 @@
+
 /**
  * \file frame.cpp
  *
@@ -15,6 +16,7 @@
 #include <cassert>
 #include <complex>
 #include <cstdlib>
+#include <fstream>
 #include <iterator>
 #include <limits>
 #include <stdexcept>
@@ -76,6 +78,16 @@ const pixel& frame::at(size_t x, size_t y) const
 static uint8_t gc(uint8_t x)
 {
         return 255*pow(double(x)/255, 2.5);
+}
+
+void frame::move_right()
+{
+        size_t x, y;
+         for (y = 0; y < HEIGHT; ++y) {
+                for (x = WIDTH; x-- > 1;)
+                        at(x, y) = at(x-1, y);
+                at(0, y) = pixel(0, 0, 0);
+        }
 }
 
 void frame::write() const
@@ -155,7 +167,17 @@ void frame_generator::play_song(const string& fname)
                         offset = duration_cast<microseconds>(next_start - start);
                         if (!make_next_frame(song, offset, f))
                                 break;
+                        
                         this_thread::sleep_until(next_start);
+                }
+                // scroll what was on the screen off the screen (a bit hacky
+                // to have this in the frame_generator abstract class but it
+                // was hard to find a better way
+                for (size_t i = 0; i < 32; ++i) {
+                        this_thread::sleep_until(next_start);
+                        f.move_right();
+                        f.write();
+                        next_start = start + ++frame_count*interval;
                 }
         }
         waitpid(pid, NULL, 0);
@@ -169,33 +191,25 @@ scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate)
 
 void scrolling_fft_generator::calc_parameters(const wav_reader& song)
 {
-        vector<float> samples = song.get_all_samples();
-        vector<complex<float>> spec;
-        size_t i;
-
-        copy(samples.begin(), samples.end(), back_inserter(spec));
-        fft(spec);
-
-        if (max_ == -0.0/1.0)
-                max_ = song.max_sample();
-
-        auto complex_less = [&] (complex<float>& a, complex<float>& b) {return abs(a) < abs(b);};
-        
-        complex<float> max_amp = *max_element(spec.begin(), spec.end(), complex_less);
-        float tolerance = 0.01;
-        
-        for (i = spec.size()/2; i-- > 0; ) {
-                if (abs(spec.at(i)) < abs(tolerance*max_amp)) {
-                        spec_frac_ = i / float(spec.size());
-                        break;
+        max_ = song.max_sample();
+        string line;
+        ifstream param_file ("parameters.txt");
+        size_t count = 1;
+        if (param_file.is_open()) {
+                while ( getline (param_file,line) ){
+                        if (line.find("order") != string::npos) {
+                                continue;
+                        }
+                        if (count == 1) {
+                                cutoff_ = stof(line);
+                        }
+                        else if (count == 2) {
+                                spec_frac_ = stof(line);
+                        }
+                        count++;
                 }
-        }
-
-        float cutoff_percentile = 0.995;
-        size_t cutoff_index = cutoff_percentile * spec.size();
-        nth_element(spec.begin(), spec.begin() + cutoff_index, spec.end(), complex_less);
-        cutoff_ = log(abs(spec.at(cutoff_index)) + 1) / log(max_);
-        cout << "spec_frac is " << spec_frac_ << " cutoff is " << cutoff_ << endl;
+                param_file.close();
+        }  
 }
 
 
@@ -218,7 +232,7 @@ bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
         new_col = pick_pixels(spec);
 
         for (y = 0; y < frame::HEIGHT; ++y) {
-                for (x = frame::WIDTH; x-- > 1;)
+                for (x = frame::WIDTH - 1; x-- > 1;)
                         frame.at(x, y) = frame.at(x-1, y);
                 frame.at(0, y) = new_col.at(y);
         }
@@ -237,9 +251,9 @@ scrolling_fft_generator::make_spectrum(const wav_reader& song,
         // use a gaussian window.
         // https://en.wikipedia.org/wiki/Window_function#Gaussian_window
         n = sample.size();
-        for (i = 0; i < n; ++i)
-                sample.at(i) *= pow(M_E, -0.5*pow((i - (n - 1)/2)/
-                                                  (sigma*(n-1)/2), 2));
+        //for (i = 0; i < n; ++i)
+        //        sample.at(i) *= pow(M_E, -0.5*pow((i - (n - 1)/2)/
+        //                                          (sigma*(n-1)/2), 2));
 
         // copy the real sample to a complex sample
         copy(sample.begin(), sample.end(), back_inserter(spec));
@@ -302,7 +316,7 @@ scrolling_fft_generator::pick_pixels(const vector<complex<float>>& spec)
                         col[i] = pixel(0,0,0);
                 else {
                         bin = (bin - cutoff_)/(1 - cutoff_);
-                        bin = pow(bin, 1.0/3);
+                        bin = pow(bin, 1.0/3);                
                         col[i] = rainbow(0.8 - bin);
                 }
         }
