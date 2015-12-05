@@ -63,7 +63,7 @@ endmodule
  * \param __sdi    unsynchronized SPI data in
  * \param cdone    copy done signal. Raised by controller when it finih
  * \param raddr    The read address, i.e. which pixel to read.
- * \param pix      The pixel at that raddr.
+ * \param pix_out  The pixel at raddr.
  * \param rdone    Raised for one cycle when we finish a reading a frame.
  */
 module frame_reader
@@ -199,7 +199,7 @@ module frame_writer
                     output logic fend,
                     output logic [2:0] lo_rgb,
                     output logic [2:0] hi_rgb,
-                    output logic [3:0] row_out,
+                    output logic [3:0] row,
                     output logic mclk,
                     output logic latch,
                     output logic oe);
@@ -213,7 +213,6 @@ module frame_writer
     logic [FRAME_ORDER-2:0] addr;
     logic lo_we, hi_we;
     logic [LATCH_BITS-1:0] latch_count;
-    logic [3:0] row;
     logic [CDEPTH-1:0] pwm_cnt;
 
     /* 
@@ -234,7 +233,6 @@ module frame_writer
             mclk_div <= '0;
             state <= WAIT;
             latch_count <= '0;
-            row_out <= '0;
             pwm_cnt <= '0;
         end else begin
             state <= next_state;
@@ -250,10 +248,8 @@ module frame_writer
                 latch_count <= latch_count + 1'b1;
                 if (latch_count == 1 << (LATCH_BITS-2)) begin
                     pwm_cnt <= pwm_cnt + 1'b1;
-                    if (pwm_cnt == '1) begin
-                        row_out <= row;
+                    if (pwm_cnt == '1)
                         row <= row + 1'b1;
-                    end
                 end
             end
         end
