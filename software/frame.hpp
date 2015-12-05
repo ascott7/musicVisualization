@@ -82,7 +82,7 @@ private:
 // basic fft frame generator. not yet implemented
 class scrolling_fft_generator : public frame_generator {
 public:
-        scrolling_fft_generator(unsigned frame_rate, float cutoff);
+        scrolling_fft_generator(unsigned frame_rate);
         ~scrolling_fft_generator() = default;
 
 protected:
@@ -93,15 +93,32 @@ protected:
         unsigned get_frame_rate() const;
 
 private:
-        // convert a sample to a column of pixels to write out next
-        std::array<pixel, frame::HEIGHT>
-        make_next_column(std::vector<std::complex<float>>& sample);
-
-        // convert a normalized, binned, spectrum sample to a pixel value.
-        pixel normal_to_pixel(float norm);
+        // find what fraction of the spectrum has interesting data
+        void calc_parameters(const wav_reader& song);
         
+        // create the spectrum of the next time sample
+        bool make_spectrum(const wav_reader& song,
+                           std::chrono::microseconds start,
+                           std::vector<std::complex<float>>& spec);
+
+        // use spectrum to choose the next column of pixels to display
+        std::array<pixel, frame::HEIGHT>
+        pick_pixels(const std::vector<std::complex<float>>& spec);
+
+        // given a float in the range 0 <= x < 1, compute the pixel value
+        // that is x percent of the way through a rainbow
+        static pixel rainbow(float x);
+
+        // In pick_pixels we want to bin the spectrum into bins of
+        // logrithmic size where each bin size is b_i = alpha*b_{i-1}.
+        // This function computes alpha given b_0, the size of the first
+        // bin and n, the number of samples of in the spectrum
+        static float compute_alpha(size_t b_0, size_t n);
+
         const unsigned frame_rate_;
         float cutoff_;
+        float max_ = -0.0/1.0;
+        float spec_frac_;
 };
 
 // lambda generator. holds a function that is called in place of

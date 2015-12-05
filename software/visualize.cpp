@@ -11,6 +11,7 @@
 *
 */
 
+#include "system_constants.hpp"
 #include "wav_reader.hpp"
 #include "frame.hpp"
 #include "piHelpers.h"
@@ -20,8 +21,6 @@
 #include <algorithm>
 #include <cmath>
 #include <iostream>
-
-#define RESET_PIN 20
 
 using namespace std;
 
@@ -44,25 +43,20 @@ int main (int argc, char** argv)
     string filename = argv[1];
     string type = "fft";
 
-    if (argc == 3) {
+    if (argc == 3)
             type = argv[2];
-            if (type != "fft" && type != "test") {
-                    cout << "type argument must be 'fft' or 'test'" << endl;
-                    return 1;
-            }
-    }
 
     pioInit();
     pTimerInit();
-    spiInit(244000, 0);
+    spiInit(7812000, 0);
 
     pinMode(RESET_PIN, OUTPUT);
     digitalWrite(RESET_PIN, 1);
     digitalWrite(RESET_PIN, 0);
 
     size_t frame_rate = 20;
-    float cutoff = 0.002;
-    scrolling_fft_generator fft_gen(frame_rate, cutoff);
+    float cutoff = 0.3;
+    scrolling_fft_generator fft_gen(frame_rate);
 
     // at some point we should move cool shit to another file, but for
     // now I'm just dumping it here. This makes a rainbow.
@@ -91,8 +85,10 @@ int main (int argc, char** argv)
 
     if (type == "fft")
             fft_gen.play_song(filename);
-    else
+    else if (type == "test")
             test_gen.play_song(filename);
+    else if (type == "rainbow")
+            rainbow.play_song(filename);
 
     return 0;
 }

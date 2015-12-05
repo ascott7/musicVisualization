@@ -19,6 +19,7 @@
 #include <limits>
 #include <stdexcept>
 #include <thread>
+#include <iostream>
 
 #include <sys/types.h>
 #include <sys/wait.h>
@@ -157,109 +158,157 @@ void frame_generator::play_song(const string& fname)
                         this_thread::sleep_until(next_start);
                 }
         }
-
-        waitpid(pid, NULL, WEXITED);
+        waitpid(pid, NULL, 0);
 }
 
-scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate, float cutoff)
-        : frame_rate_(frame_rate), cutoff_(cutoff)
+scrolling_fft_generator::scrolling_fft_generator(unsigned frame_rate)
+        : frame_rate_(frame_rate), cutoff_(0.0), spec_frac_(0.5)
 {}
 
-// get the next power of 2 above v, unless v is a power of 2, in which case
-// return v. If v is zero, we return 0 because even though that's mathematically
-// wrong it's convenient.
-//
-// taken from here:
-// http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2Float
-static size_t next_power_of2_or_zero(size_t v)
-{
-        size_t t;
-        float f;
 
-        if (v > 1) {
-                f = (float)v;
-                t = 1U << ((*(unsigned int *)&f >> 23) - 0x7f);
-                return t << (t < v);
-        } else
-                return v;
+
+void scrolling_fft_generator::calc_parameters(const wav_reader& song)
+{
+        vector<float> samples = song.get_all_samples();
+        vector<complex<float>> spec;
+        size_t i;
+
+        copy(samples.begin(), samples.end(), back_inserter(spec));
+        fft(spec);
+
+        if (max_ == -0.0/1.0)
+                max_ = song.max_sample();
+
+        auto complex_less = [&] (complex<float>& a, complex<float>& b) {return abs(a) < abs(b);};
+        
+        complex<float> max_amp = *max_element(spec.begin(), spec.end(), complex_less);
+        float tolerance = 0.01;
+        
+        for (i = spec.size()/2; i-- > 0; ) {
+                if (abs(spec.at(i)) < abs(tolerance*max_amp)) {
+                        spec_frac_ = i / float(spec.size());
+                        break;
+                }
+        }
+
+        float cutoff_percentile = 0.995;
+        size_t cutoff_index = cutoff_percentile * spec.size();
+        nth_element(spec.begin(), spec.begin() + cutoff_index, spec.end(), complex_less);
+        cutoff_ = log(abs(spec.at(cutoff_index)) + 1) / log(max_);
+        cout << "spec_frac is " << spec_frac_ << " cutoff is " << cutoff_ << endl;
 }
+
 
 bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
                                               std::chrono::microseconds start,
                                               frame& frame)
 {
         size_t x, y;
+        vector<complex<float>> spec;
         array<pixel, frame::HEIGHT> new_col;
-        vector<float> sample = song.get_range(start,
-                                              start + get_frame_interval());
-        size_t csize = next_power_of2_or_zero(sample.size());
-        vector<complex<float>> c_sample;
+        static bool called = false;
+        if (!called) {
+                called = true;
+                calc_parameters(song);
+        }
 
-        // copy the real sample to a complex array and 0-pad it to
-        // a power of 2 size
-        copy(sample.begin(), sample.end(), back_inserter(c_sample));
-        fill_n(back_inserter(c_sample), csize - c_sample.size(), 0);
-        if (fft(c_sample))
+        if (!make_spectrum(song, start, spec))
                 return false;
 
-        new_col = make_next_column(c_sample);
+        new_col = pick_pixels(spec);
 
         for (y = 0; y < frame::HEIGHT; ++y) {
                 for (x = frame::WIDTH; x-- > 1;)
                         frame.at(x, y) = frame.at(x-1, y);
-
                 frame.at(0, y) = new_col.at(y);
         }
         return true;
 }
 
-array<pixel, frame::HEIGHT>
-scrolling_fft_generator::make_next_column(vector<complex<float>>& spectrum)
+bool
+scrolling_fft_generator::make_spectrum(const wav_reader& song,
+                                       microseconds start,
+                                       vector<complex<float>>& spec)
 {
-        array<pixel, frame::HEIGHT> binned;
-        complex<float> max, sum;
-        vector<complex<float>>::iterator it;
-        unsigned bin_size;
+        vector<float> sample = song.get_range(start, get_frame_interval());
+        size_t i, n;
+        float sigma = 0.45;
 
-        // find the max element in the spectrum
-        max = *max_element(spectrum.begin(), spectrum.end(),
-                          [&](complex<float>& lhs, complex<float>& rhs) {
-                return abs(lhs) < abs(rhs);
-        });
+        // use a gaussian window.
+        // https://en.wikipedia.org/wiki/Window_function#Gaussian_window
+        n = sample.size();
+        for (i = 0; i < n; ++i)
+                sample.at(i) *= pow(M_E, -0.5*pow((i - (n - 1)/2)/
+                                                  (sigma*(n-1)/2), 2));
 
-        // normalize by that element
-        for_each(spectrum.begin(), spectrum.end(), [&](complex<float>& i) {
-                i /= max;
-        });
-
-        // bin the spectrum. each element in the binned spectrum gets the
-        // average of the next bin_size elements from the spectrum. We
-        // multiply binned.size() by 2 because we only want half of
-        // the spectrum (it's symetric)
-        it = spectrum.begin();
-        bin_size = spectrum.size()/(2*binned.size());
-        for_each(binned.begin(), binned.end(), [&](pixel& pix) {
-                sum = 0;
-                for_each(it, it + bin_size, [&](complex<float>& i) {
-                        sum += i;
-                });
-
-                pix = normal_to_pixel(abs(sum/complex<float>(bin_size)));
-                it += bin_size;
-        });
-
-        return binned;
+        // copy the real sample to a complex sample
+        copy(sample.begin(), sample.end(), back_inserter(spec));
+        return fft(spec) == 0 && spec.size() > frame::HEIGHT;
 }
 
-pixel scrolling_fft_generator::normal_to_pixel(float norm)
+pixel scrolling_fft_generator::rainbow(float x)
 {
-        uint8_t max = numeric_limits<uint8_t>::max();
-        assert(norm <= 1.0);
+        float f = 2*M_PI*x;
+        float phase = 2*M_PI/3;
 
-        // for now we just use a green/blue pixel, with high values
-        // being all green and low values being all blue
-        return norm > cutoff_ ? pixel(0, norm*max, (1.0 - norm)*max)
-                : pixel();
+        if (x > 1 || x < 0)
+                cout << __func__ << ": got x=" << x << ", which is > 1 or < 0"
+                     << endl;
+        
+        return pixel(127*(1 + cos(f - phase)),
+                     127*(1 + cos(f)),
+                     127*(1 + cos(f - 2*phase)));
+}
+
+// we implement this using guess and check because hey, it works, and it's
+// pretty quick. Basically we just keep guessing at alpha untill we get
+// close enough to n
+float
+scrolling_fft_generator::compute_alpha(size_t b_0, size_t n)
+{
+        float alpha = 1.0;
+        float step = 0.001;
+        float tolerance = 1.0;
+        float delta;
+
+        n /= b_0;
+
+        for (;;) {
+                delta = n - (pow(alpha, frame::HEIGHT) - 1)/(alpha - 1);
+                if (delta > 0 && delta < tolerance)
+                        return alpha;
+                else if (delta < 0)
+                         return alpha - step;
+                alpha += step;
+        }
+}
+
+array<pixel, frame::HEIGHT>
+scrolling_fft_generator::pick_pixels(const vector<complex<float>>& spec)
+{
+        const size_t b_0 = 8;
+        float alpha = compute_alpha(b_0, spec.size()*spec_frac_ - frame_rate_);
+        auto iter = spec.begin() + frame_rate_;
+        array<pixel, frame::HEIGHT> col;
+        complex<float> sum;
+        size_t i, b;
+        float bin;
+
+        for (i = 0; i < col.size(); ++i, iter += b) {
+                b = b_0*pow(alpha, i);
+                sum = accumulate(iter, iter + b, complex<float>(0));
+                bin = log(abs(sum) + 1)/log(b*max_);
+                if (bin < cutoff_)
+                        col[i] = pixel(0,0,0);
+                else {
+                        bin = (bin - cutoff_)/(1 - cutoff_);
+                        bin = pow(bin, 1.0/3);
+                        col[i] = rainbow(0.8 - bin);
+                }
+        }
+
+        reverse(col.begin(), col.end());
+        return col;
 }
 
 unsigned scrolling_fft_generator::get_frame_rate() const

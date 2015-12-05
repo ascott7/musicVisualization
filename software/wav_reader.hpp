@@ -18,7 +18,6 @@ class wav_reader {
     public:
         wav_reader(std::string filename);
         wav_reader() = delete;
-        ~wav_reader();
 
         /**
         *   \brief Returns a vector containing all of the samples that fall
@@ -31,7 +30,11 @@ class wav_reader {
         */
         std::vector<float> get_range(std::chrono::microseconds start, 
             std::chrono::microseconds duration) const;
-    
+
+        float max_sample() const;
+
+        // return the entire song
+        std::vector<float> get_all_samples() const;
     private:
         struct riff_header {
             char ck_id[5];                      // should be "RIFF"
@@ -64,8 +67,9 @@ class wav_reader {
 
         void read_general_chunk(char* file_data, size_t& file_offset);
 
-        uint8_t* samples_;         ///> the data samples themselves
-        size_t num_samples_;     ///> the number of samples
+        std::vector<int16_t> samples_;  ///> the data samples themselves
+        size_t num_samples_;            ///> the number of samples
+        float max_sample_;              ///> the largest sample
 };
 
 #endif // WAVREADER_HPP_INCLUDED

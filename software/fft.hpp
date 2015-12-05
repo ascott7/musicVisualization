@@ -48,22 +48,44 @@ void bit_reverse_sort(std::vector<std::complex<float_t>>& data)
         }
 }
 
+// get the next power of 2 above v, unless v is a power of 2, in which case
+// return v. If v is zero, we return 0 because even though that's mathematically
+// wrong it's convenient.
+//
+// taken from here:
+// http://graphics.stanford.edu/~seander/bithacks.html#RoundUpPowerOf2Float
+size_t next_power_of2_or_zero(size_t v)
+{
+        size_t t;
+        float f;
+
+        if (v > 1) {
+                f = (float)v;
+                t = 1U << ((*(unsigned int *)&f >> 23) - 0x7f);
+                return t << (t < v);
+        } else
+                return v;
+}
+        
 template <bool forward, typename float_t>
 int fft_impl(std::vector<std::complex<float_t>>& data)
 {
-        const size_t n = data.size();
+        size_t n = data.size();
         const std::complex<float_t> w_n = std::exp(
                 std::complex<float_t>(2*M_PI*(forward ? -1 : 1)/n)*
                 std::complex<float_t>(0, 1));
         std::complex<float_t> even, odd, w_curr, w_step;
-        size_t grp_size, grp, i, start;
+        size_t grp_size, grp, i, start, size;
 
         static_assert(std::numeric_limits<float_t>::is_iec559,
                       "float_t must be a floating point type");
 
-        // size must be a sane power of 2
-        if ((n & (n-1)) != 0 || n < 2)
-                return EINVAL;
+        // zero pad data if n is not a power of 2
+        if ((n & (n-1)) != 0) {
+                size = next_power_of2_or_zero(data.size());
+                fill_n(back_inserter(data), size - data.size(), 0);
+                n = data.size();
+        }
 
         bit_reverse_sort(data);
 

@@ -18,7 +18,9 @@
 
 #include <cstring>
 #include <iostream>
+#include <iterator>
 #include <fstream>
+#include <algorithm>
 using namespace std;
 
 #define CHUNK_SIZE_LENGTH 4
@@ -43,6 +45,7 @@ wav_reader::wav_reader(string filename)
             read_general_chunk(file_data, file_offset);
         }
 
+
         delete[] file_data;
     }
     else {
@@ -51,29 +54,32 @@ wav_reader::wav_reader(string filename)
     }
 }
 
-wav_reader::~wav_reader()
+float wav_reader::max_sample() const
 {
-    if (num_samples_ > 0) {
-        delete[] samples_;
-    }
+        return max_sample_;
 }
 
 vector<float> wav_reader::get_range(chrono::microseconds start, 
             chrono::microseconds duration) const
 {
     vector<float> samples_in_range;
-    float samples_per_micros = float(fmt_chunk.dw_samples_per_sec) / 1000000;
-    uint32_t start_index = uint32_t(samples_per_micros * start.count());
-    uint32_t range_length = uint32_t(samples_per_micros * duration.count());
-    for (uint32_t i = 0; i < range_length; i++) {
-            if (start_index + i >= num_samples_)
+    const float samples_per_micros = float(fmt_chunk.dw_samples_per_sec) / 1000000;
+    const uint32_t start_index = uint32_t(samples_per_micros * start.count());
+    const uint32_t range_length = uint32_t(samples_per_micros * duration.count());
+    for (uint32_t i = start_index; i < start_index + range_length; i++) {
+            if (i >= samples_.size())
                     return samples_in_range;
-        samples_in_range.push_back(float(samples_[start_index + i]));
+            samples_in_range.push_back(float(samples_.at(i)));
     }
-    // this print statement appears to work (it prints out what we expect)
-    // but it also causes a memory leak for some reason
-    // cout << samples_in_range.at(0) << endl;
+
     return samples_in_range;
+}
+
+vector<float> wav_reader::get_all_samples() const
+{
+        vector<float> samples;
+        copy(samples_.begin(), samples_.end(), back_inserter(samples));
+        return samples;
 }
 
 size_t wav_reader::read_header_chunk(ifstream& file)
@@ -119,8 +125,6 @@ void wav_reader::read_general_chunk(char* file_data, size_t& file_offset)
     id[4] = '\0';
     size_t size = *(uint32_t *) (file_data + sizeof(char) * (file_offset + 4));
 
-    cout << id << endl;
-
     // if we are at the format chunk, get the formatting information
     if (strcmp(id, "fmt ") == 0) {
         fmt_chunk.ck_size = *(size_t *) (file_data + sizeof(char) * 4);
@@ -134,10 +138,47 @@ void wav_reader::read_general_chunk(char* file_data, size_t& file_offset)
     // if we are at the data chunk, get the data samples
     if (strcmp(id, "data") == 0) {
         num_samples_ = size;
-        samples_ = new uint8_t[size];
-        for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_; i++) {
-            samples_[i - (file_offset + 8)] = uint8_t(file_data[i]);
+        if (fmt_chunk.w_channels == 1) {
+            if (fmt_chunk.w_bits_per_sample == 8) {
+                    for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_; i++) {
+                            samples_.push_back(uint8_t(file_data[i]));
+                    }
+            }
+            else if (fmt_chunk.w_bits_per_sample == 16) {
+                    num_samples_ /= 2;
+                    for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_ * 2; i+=2) {
+                            uint8_t byte1 = uint8_t(file_data[i]);
+                            uint8_t byte2 = uint8_t(file_data[i + 1]);
+                            int16_t sample = int16_t(byte2) << 8 | byte1;
+                            samples_.push_back(sample);
+                    }
+            }
+        } else if (fmt_chunk.w_channels == 2) {
+            if (fmt_chunk.w_bits_per_sample == 8) {
+                    num_samples_ /= 2;
+                    for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_ * 2; i+=2) {
+                            uint8_t byte1 = uint8_t(file_data[i]);
+                            uint8_t byte2 = uint8_t(file_data[i + 1]);
+                            int16_t sample = (byte1 + byte2) / 2;
+                            samples_.push_back(sample);
+                    }
+            }
+            else if (fmt_chunk.w_bits_per_sample == 16) {
+                    num_samples_ /= 4;
+                    for (size_t i = file_offset + 8; i < file_offset + 8 + num_samples_ * 4; i+=4) {
+                            uint8_t byte1 = uint8_t(file_data[i]);
+                            uint8_t byte2 = uint8_t(file_data[i + 1]);
+                            uint8_t byte3 = uint8_t(file_data[i + 2]);
+                            uint8_t byte4 = uint8_t(file_data[i + 3]);
+                            int16_t sample1 = int16_t(byte2) << 8 | byte1;
+                            int16_t sample2 = int16_t(byte4) << 8 | byte3;
+                            int16_t sample = (int32_t(sample1) + sample2) / 2;
+                            samples_.push_back(sample);
+                    }
+            }
         }
+
+        max_sample_ = float(*max_element(samples_.begin(), samples_.end()));
     }
 
     file_offset = file_offset + size + CHUNK_ID_LENGTH + CHUNK_SIZE_LENGTH;
