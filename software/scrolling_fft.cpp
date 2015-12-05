@@ -1,7 +1,7 @@
 /**
-*   \file visualize.cpp
+*   \file scrolling_fft.cpp
 *
-*   \author Andrew Scott -- ascott@hmc.edu
+*   \author Andrew Scott -- ascott@hmc.edu and Eric Mueller -- emueller@hmc.edu
 *
 *   \brief Script that takes a file name as a command line argument and
 *       then calls all the helper code we have to play the song in the
@@ -16,6 +16,7 @@
 #include "piHelpers.h"
 
 #include <algorithm>
+#include <iostream>
 
 using namespace std;
 
@@ -24,7 +25,7 @@ int main (int argc, char** argv)
     scrolling_fft_generator gen;
         
     if (argc != 2) {
-        cout << "usage: ./visualize filename.wav"
+        cout << "usage: ./scrolling_fft filename.wav"
              << endl;
         return 1;
     }
