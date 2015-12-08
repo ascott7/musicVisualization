@@ -273,7 +273,7 @@ bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
         if (!make_spectrum(song, start, spec)) {
             final_count += 1;
             for (y = 0; y < frame::HEIGHT; ++y) {
-                for (x = frame::WIDTH - 1; x-- > 1;)
+                for (x = frame::WIDTH; x-- > 1;)
                         frame.at(x, y) = frame.at(x-1, y);
                 frame.at(0, y) = pixel(0, 0, 0);
             }
@@ -288,7 +288,7 @@ bool scrolling_fft_generator::make_next_frame(const wav_reader& song,
 
         // shift the frame over and add the new column on the left edge
         for (y = 0; y < frame::HEIGHT; ++y) {
-                for (x = frame::WIDTH - 1; x-- > 1;)
+                for (x = frame::WIDTH; x-- > 1;)
                         frame.at(x, y) = frame.at(x-1, y);
                 frame.at(0, y) = new_col.at(y);
         }
